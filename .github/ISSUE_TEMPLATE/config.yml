@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Documentación de arquitectura
-    url: https://github.com/OWNER/KuraiPilot/tree/main/docs
+    url: https://github.com/DavidDevGt/KuraiPilot/tree/main/docs
     about: Antes de proponer un cambio estructural, leé los docs y ADRs — quizá ya está decidido (y por qué).
