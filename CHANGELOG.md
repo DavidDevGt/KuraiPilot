@@ -20,3 +20,4 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). Versionado: S
 ### Fixed
 
 - `kurai --version` no funcionaba sin subcomando.
+- Auditoría del motor de video contra mejores prácticas (docs/02 E1/E9): deadlock latente de `stderr=PIPE` sin lector en decode/encode (ahora a tempfile), NVENC con bitrate capado por falta de `-b:v 0` en modo CQ, colores corridos por matriz BT.601 default de swscale (ahora BT.709 explícito + VUI tagueado vía `setparams`), y drift de frame rate por pasar float en vez del racional exacto.

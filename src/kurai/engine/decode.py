@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 from collections.abc import Iterator
 from fractions import Fraction
 from pathlib import Path
@@ -45,14 +46,14 @@ def _ffprobe_json(path: Path) -> dict[str, object]:
     return json.loads(proc.stdout)  # type: ignore[no-any-return]  # json.loads → Any
 
 
-def _parse_fps(stream: dict[str, object]) -> float:
-    """avg_frame_rate primero (VFR honesto); r_frame_rate como fallback."""
+def _parse_fps(stream: dict[str, object]) -> tuple[float, str]:
+    """(float, racional exacto). avg_frame_rate primero (VFR honesto)."""
     for key in ("avg_frame_rate", "r_frame_rate"):
         raw = stream.get(key)
         if isinstance(raw, str) and raw not in ("0/0", "0/1", ""):
             value = Fraction(raw)
             if value > 0:
-                return float(value)
+                return float(value), raw
     raise DecodeError("No se pudo determinar el frame rate del video")
 
 
@@ -92,7 +93,7 @@ def probe_video(path: Path) -> VideoMeta:
         raise DecodeError(f"{path.name}: sin duración en metadata")
     duration_s = float(str(duration_raw))
 
-    fps = _parse_fps(video)
+    fps, fps_rational = _parse_fps(video)
     rotation = _parse_rotation(video)
     width, height = int(str(video["width"])), int(str(video["height"]))
     # ffmpeg autorota en decode: si la rotación es 90/270, el frame que sale
@@ -109,6 +110,7 @@ def probe_video(path: Path) -> VideoMeta:
         rotation=rotation,
         has_audio=has_audio,
         codec=str(video.get("codec_name", "unknown")),
+        fps_rational=fps_rational,
     )
 
 
@@ -130,42 +132,50 @@ def iter_frames(
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
     if hwaccel:
         cmd += ["-hwaccel", "cuda"]
+    # accurate_rnd+full_chroma_int: sin ellos swscale usa el camino rápido con
+    # más error de redondeo en la conversión YUV→RGB (docs/02 E1).
     cmd += [
         "-i",
         str(path),
         "-vf",
-        f"fps={meta.fps},scale={work_width}:{work_height}:flags=area",
+        f"fps={meta.fps_expr},"
+        f"scale={work_width}:{work_height}:flags=area+accurate_rnd+full_chroma_int",
         "-f",
         "rawvideo",
         "-pix_fmt",
         "rgb24",
         "-",
     ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert proc.stdout is not None
-    completed = False
-    try:
-        while True:
-            chunk = proc.stdout.read(frame_bytes)
-            if not chunk:
-                break
-            if len(chunk) < frame_bytes:
-                raise DecodeError(
-                    f"{path.name}: frame truncado a los "
-                    f"{len(chunk)} de {frame_bytes} bytes (¿archivo corrupto?)"
-                )
-            yield np.frombuffer(chunk, dtype=np.uint8).reshape(work_height, work_width, 3)
-        completed = True
-    finally:
-        # Consumidor que abandona antes del final (GeneratorExit, excepción
-        # aguas arriba): matar ffmpeg sin reportar su broken pipe como error.
-        if not completed:
-            proc.kill()
-        proc.stdout.close()
-        stderr = proc.stderr.read().decode() if proc.stderr else ""
-        code = proc.wait()
-        if completed and code != 0:
-            raise DecodeError(f"ffmpeg falló decodificando {path.name}: {stderr.strip()}")
+    # stderr a archivo, NUNCA a PIPE sin lector: con ambos pipes llenos ffmpeg
+    # se bloquea escribiendo warnings mientras nosotros bloqueamos leyendo
+    # stdout — deadlock clásico (docs/02 E1).
+    with tempfile.TemporaryFile() as stderr_file:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr_file)
+        assert proc.stdout is not None
+        completed = False
+        try:
+            while True:
+                chunk = proc.stdout.read(frame_bytes)
+                if not chunk:
+                    break
+                if len(chunk) < frame_bytes:
+                    raise DecodeError(
+                        f"{path.name}: frame truncado a los "
+                        f"{len(chunk)} de {frame_bytes} bytes (¿archivo corrupto?)"
+                    )
+                yield np.frombuffer(chunk, dtype=np.uint8).reshape(work_height, work_width, 3)
+            completed = True
+        finally:
+            # Consumidor que abandona antes del final (GeneratorExit, excepción
+            # aguas arriba): matar ffmpeg sin reportar su broken pipe como error.
+            if not completed:
+                proc.kill()
+            proc.stdout.close()
+            code = proc.wait()
+            if completed and code != 0:
+                stderr_file.seek(0)
+                stderr = stderr_file.read().decode(errors="replace")
+                raise DecodeError(f"ffmpeg falló decodificando {path.name}: {stderr.strip()}")
 
 
 def extract_audio(path: Path, dest: Path) -> Path | None:

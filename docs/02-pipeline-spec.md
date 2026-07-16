@@ -83,6 +83,11 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 - **Entrada**: stream de frames RGB + audio apartado de la Etapa 1.
 - **Salida**: `output.mp4` (h264 por compatibilidad) o `output.webm`.
 - **Implementación**: ffmpeg NVENC (`h264_nvenc`, preset `p5`, CQ configurable). El contenido ASCII es de alta frecuencia espacial y detalle fino: usar `-tune hq` y CQ ≤ 23 o los glifos se vuelven papilla con la compresión. Audio: `-c:a copy` — el audio original se muxea sin recodificar; solo se recodifica si el contenedor de destino no soporta el códec original.
+- **Prácticas obligatorias auditadas contra la industria** (Fase 0):
+  - NVENC en calidad constante real exige `-b:v 0` junto a `-cq`; sin eso el bitrate queda capado al default y `-cq` es decorativo.
+  - La conversión RGB→YUV se fija a BT.709 (`scale=out_color_matrix=bt709:out_range=tv:flags=full_chroma_int+accurate_rnd`) y se taguea el VUI completo vía `setparams` — swscale usa BT.601 por defecto y los players HD asumen BT.709 (color corrido sin esto).
+  - El frame rate viaja como racional exacto (`30000/1001`) por `fps=` y `-r`, nunca como float formateado (drift en videos largos).
+  - `stderr` de los subprocess ffmpeg va a archivo temporal, jamás a PIPE sin lector concurrente (deadlock cuando el buffer del pipe se llena de warnings).
 - **Sincronía**: la normalización a CFR de la Etapa 1 garantiza que `n_frames_out = n_frames_in`; el PTS del primer frame se preserva.
 
 ## 10. Presets (mapeo a etapas)

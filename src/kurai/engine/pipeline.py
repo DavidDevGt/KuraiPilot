@@ -77,6 +77,7 @@ def run_job(
         rotation=0,
         has_audio=meta.has_audio,
         codec="h264",
+        fps_rational=meta.fps_rational,
     )
 
     # Fast path E1+E2 fusionadas: si ninguna etapa necesita píxeles a resolución
