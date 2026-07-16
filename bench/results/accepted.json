@@ -1,0 +1,11 @@
+{
+  "mode": "passthrough",
+  "clip": "ref_1920x1080_30fps_10s.mp4",
+  "encoder": "h264_nvenc",
+  "video_seconds": 10.0,
+  "wall_seconds": 1.07,
+  "speed_factor": 9.34,
+  "frames": 300,
+  "commit": "70df66d",
+  "timestamp": "2026-07-16T03:44:37+00:00"
+}

@@ -108,7 +108,52 @@ def live(
 @app.command()
 def bench(
     check: Annotated[bool, typer.Option("--check", help="Falla si hay regresión >10%.")] = False,
+    accept: Annotated[
+        bool, typer.Option("--accept", help="Guarda este run como baseline aceptado.")
+    ] = False,
 ) -> None:
-    """Benchmark sobre los fixtures (docs/05 §6). Se construye ANTES que el pipeline."""
-    console.print(FASE_PENDIENTE)
-    raise typer.Exit(code=2)
+    """Benchmark de infraestructura (docs/05 §6): passthrough decode→encode."""
+    import tempfile
+
+    from kurai.bench import (
+        check_regression,
+        ensure_bench_clip,
+        load_accepted,
+        run_passthrough,
+        save,
+    )
+
+    r = probe()
+    if not r.can_convert:
+        console.print("[red]✗[/] ffmpeg no disponible — correr `kurai doctor`")
+        raise typer.Exit(code=1)
+    use_nvenc = r.hw_pipeline and not r.gpu_disabled_by_env
+
+    console.print("Generando/cacheando clip de referencia (1080p30 · 10 s)…")
+    clip = ensure_bench_clip()
+    console.print(f"Passthrough con [bold]{'h264_nvenc' if use_nvenc else 'libx264'}[/]…")
+
+    with tempfile.TemporaryDirectory(prefix="kurai-bench-") as tmp:
+        result = run_passthrough(clip, Path(tmp), use_nvenc=use_nvenc)
+
+    save(result, accept=accept)
+    console.print(
+        f"  {result.frames} frames · {result.wall_seconds}s wall → "
+        f"[bold green]{result.speed_factor}×[/] tiempo real"
+    )
+    if accept:
+        console.print("[green]✓[/] Baseline aceptado en bench/results/accepted.json")
+        return
+
+    baseline = load_accepted()
+    if baseline is None:
+        console.print(
+            "[yellow]⚠[/] Sin baseline aceptado. Si este resultado es representativo: "
+            "kurai bench --accept"
+        )
+        raise typer.Exit(code=1 if check else 0)
+    failure = check_regression(result, baseline)
+    if failure is not None:
+        console.print(f"[red]✗[/] {failure}")
+        raise typer.Exit(code=1 if check else 0)
+    console.print(f"[green]✓[/] Sin regresión (baseline {baseline.speed_factor}×)")

@@ -47,9 +47,10 @@ def test_convert_unknown_preset_fails_listing_available(tmp_path: Path) -> None:
 
 
 def test_pending_commands_exit_2_not_crash(tmp_path: Path) -> None:
-    """Los subcomandos de fases pendientes salen con código 2, nunca traceback."""
+    """Los subcomandos de fases pendientes salen con código 2, nunca traceback.
+    (bench ya no está acá: se implementó en Fase 0.)"""
     f = tmp_path / "x.mp4"
     f.write_bytes(b"\x00")
-    for args in (["convert", str(f)], ["preview", str(f)], ["live"], ["bench"]):
+    for args in (["convert", str(f)], ["preview", str(f)], ["live"]):
         result = runner.invoke(app, args)
         assert result.exit_code == 2, f"{args}: {result.output}"

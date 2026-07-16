@@ -21,8 +21,9 @@ models/*
 out/
 .tmp/
 
-# Bench: los resultados aceptados SÍ se versionan; los runs crudos no
+# Bench: los resultados aceptados SÍ se versionan; los runs crudos y el cache no
 bench/*.json
+bench/.cache/
 
 # Frontend
 frontend/node_modules/
