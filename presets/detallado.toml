@@ -1,0 +1,8 @@
+# Saliencia + bordes direccionales + color (docs/02 §10, gate en docs/07 Fase 1)
+saliency = true
+refine = "edges"
+dither = "bayer"
+flicker = "hysteresis"
+color = "fg"
+ramp = "short"
+gamma = 0.8

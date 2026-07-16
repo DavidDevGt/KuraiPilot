@@ -1,0 +1,9 @@
+# Modo premium: CNN de glifos, Floyd-Steinberg, flow, dos colores por celda
+# (docs/02 §10, gates en docs/07 Fase 2). Más lento que tiempo real: aceptado.
+saliency = true
+refine = "edges+cnn"
+dither = "fs"
+flicker = "hysteresis+flow"
+color = "fg+bg"
+ramp = "long"
+gamma = 0.8

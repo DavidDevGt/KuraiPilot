@@ -1,0 +1,8 @@
+# Preset default: determinista puro, estética terminal clásica (docs/02 §10)
+saliency = false
+refine = "off"
+dither = "bayer"
+flicker = "hysteresis"
+color = "mono"
+ramp = "short"
+gamma = 0.8

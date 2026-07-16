@@ -1,0 +1,64 @@
+# 07 — Roadmap
+
+Fases con criterios de aceptación verificables. Cada fase termina con un gate explícito; no se abre la siguiente con el gate anterior en rojo. Las fases refinan las de [IDEA.md](../IDEA.md) con el detalle de arquitectura ya decidido.
+
+## Fase 0 — Core determinista (el producto mínimo honesto)
+
+**Alcance**: etapas 1, 2, 4, 6-Bayer, 7-histéresis, 8, 9 ([02](./02-pipeline-spec.md)). CLI `kurai convert`. Preset `retro` completo. Calibración de rampa (`tools/calibrate_ramp.py`) y elección/fijado de la fuente de referencia.
+
+**Gate de salida**:
+- [ ] Un mp4 1080p30 arbitrario produce un mp4 ASCII con audio intacto (hash de stream de audio idéntico).
+- [ ] Golden files + garantía de reproducibilidad bit a bit en verde ([06 §1](./06-testing-and-evaluation.md)).
+- [ ] FCR ≤ 0.05 en el fixture estático ([06 §3](./06-testing-and-evaluation.md)).
+- [ ] Speed factor ≥ 4× en `retro` sobre la máquina de referencia ([05 §2](./05-performance-and-capacity.md)); `bench/results/` inaugurado.
+- [ ] Círculo de prueba sale circular (corrección de aspecto).
+
+**Riesgo principal**: el overhead de transferencias y del intérprete ([05 §3](./05-performance-and-capacity.md)). Mitigación: el bench se construye *primero*, con el pipeline vacío (decode→encode passthrough), para conocer el techo de la infraestructura antes de escribir etapas.
+
+## Fase 0.5 — Preview y terminal live
+
+**Alcance**: preview server + frontend WebGL ([03 §3](./03-tech-stack.md)); modo `kurai live` (ANSI a stdout). Ambos consumen el mismo core de mapeo que el export.
+
+**Gate**: slider de densidad/rampa refleja en <100 ms; la CharMatrix del preview es idéntica a la del export con la misma config (test de igualdad, no promesa).
+
+## Fase 1 — Saliencia
+
+**Alcance**: Etapa 3 con U2Net-lite ONNX ([04 §2](./04-ai-components.md)), scheduling cada 5 frames, preset `detallado` (incluye E5-`edges`, que es determinista y entra aquí). `tools/fetch_models.py` con hashes pineados. Degradación limpia sin modelos.
+
+**Gate**:
+- [ ] A/B ≥ 60% de preferencia con vs. sin saliencia en el set curado ([06 §4](./06-testing-and-evaluation.md)) — **este gate puede fallar**: la hipótesis de que la densidad no uniforme mejora la percepción es la apuesta central de IDEA.md y se valida aquí o se abandona.
+- [ ] Speed factor ≥ 2× en `detallado`.
+- [ ] Job completa con warning si los modelos no están (test de degradación en verde).
+
+## Fase 2 — Alta fidelidad
+
+**Alcance**: CNN de glifos (entrenamiento + export ONNX, `training/`), FS dithering, Farneback flow para histéresis warpeada, color `fg+bg`. Preset `alta-fidelidad` completo.
+
+**Gate**:
+- [ ] CNN: mejora perceptible en subset textura **y** ≤ 3 ms/frame p95, o se elimina ([04 §3](./04-ai-components.md) — la eliminación es un resultado aceptable de la fase, no un fracaso).
+- [ ] Flow: FCR en fixture de paneo mejora ≥ 50% sobre histéresis sola, o el flow no entra.
+- [ ] Speed factor ≥ 0.8×.
+
+## Fase 3 — Scene Analyst y export enriquecido
+
+**Alcance**: integración Ollama/`minicpm-v4.5` por escena con contrato de fallo completo ([04 §6](./04-ai-components.md)); flag `--auto`. Exports adicionales según demanda real: asciinema `.cast`, HTML embebible (reutiliza el frontend del preview), SVG de frame.
+
+**Gate**: los tests de contrato del Analyst (timeout, JSON inválido, VRAM presionada, Ollama caído) en verde; el export nunca se bloquea esperando al Analyst.
+
+## Fuera de roadmap (decisión, no olvido)
+
+- Superresolución de entrada — hasta tener casos reales de input de baja resolución ([04 §7](./04-ai-components.md)).
+- RAFT-small para flow — hasta que Farneback falle una métrica.
+- Servicio web público, multi-tenant — contradice [ADR-001](./adr/ADR-001-local-first.md); requeriría re-abrir esa decisión con un ADR nuevo.
+- Empaquetado/distribución (PyPI, AppImage) — cuando exista un segundo usuario.
+
+## Secuencia crítica
+
+```
+Fase 0 ──▶ Fase 0.5 ──▶ Fase 1 ──▶ Fase 2 ──▶ Fase 3
+  │            │           │
+  bench      preview    el A/B decide si la apuesta
+  primero    valida UX  central del producto es real
+```
+
+La dependencia dura es Fase 0 → todo lo demás. Fase 0.5 y Fase 1 podrían solaparse (tocan módulos disjuntos), pero el A/B de Fase 1 necesita el preview de 0.5 para revisar pares cómodamente — por eso el orden.

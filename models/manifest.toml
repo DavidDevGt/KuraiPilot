@@ -1,0 +1,18 @@
+# Modelos ONNX del AI Sidecar (docs/04). Los binarios NO van al repo:
+# tools/fetch_models.py los descarga y verifica por SHA-256 pineado.
+#
+# Los campos url/sha256 se pinean al integrar cada modelo (Fase 1 para
+# saliency, Fase 2 para glyph_cnn). Un modelo sin URL simplemente no se
+# descarga y el pipeline degrada al modo determinista.
+
+[models.saliency]
+# U2Net-lite (ADR-004). Pinear en Fase 1.
+filename = "u2net_lite.onnx"
+url = ""
+sha256 = ""
+
+[models.glyph_cnn]
+# CNN propia entrenada en training/ y exportada a ONNX. Pinear en Fase 2.
+filename = "glyph_cnn.onnx"
+url = ""
+sha256 = ""
