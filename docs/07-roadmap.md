@@ -6,12 +6,12 @@ Fases con criterios de aceptación verificables. Cada fase termina con un gate e
 
 **Alcance**: etapas 1, 2, 4, 6-Bayer, 7-histéresis, 8, 9 ([02](./02-pipeline-spec.md)). CLI `kurai convert`. Preset `retro` completo. Calibración de rampa (`tools/calibrate_ramp.py`) y elección/fijado de la fuente de referencia.
 
-**Gate de salida**:
-- [ ] Un mp4 1080p30 arbitrario produce un mp4 ASCII con audio intacto (hash de stream de audio idéntico).
-- [ ] Golden files + garantía de reproducibilidad bit a bit en verde ([06 §1](./06-testing-and-evaluation.md)).
-- [ ] FCR ≤ 0.05 en el fixture estático ([06 §3](./06-testing-and-evaluation.md)).
-- [ ] Speed factor ≥ 4× en `retro` sobre la máquina de referencia ([05 §2](./05-performance-and-capacity.md)); `bench/results/` inaugurado.
-- [ ] Círculo de prueba sale circular (corrección de aspecto).
+**Gate de salida** (✅ completado 2026-07-16):
+- [x] Un mp4 1080p30 arbitrario produce un mp4 ASCII con audio intacto (hash de stream de audio idéntico — `test_convert_e2e_with_audio`).
+- [x] Golden files + garantía de reproducibilidad bit a bit en verde ([06 §1](./06-testing-and-evaluation.md) — `test_gradient_golden`, `test_bit_exact_reproducibility`).
+- [x] FCR ≤ 0.05 en el fixture estático ([06 §3](./06-testing-and-evaluation.md) — FCR medido: 0 exacto, `test_fcr_zero_on_noisy_static`).
+- [x] Speed factor ≥ 4× en `retro` sobre la máquina de referencia ([05 §2](./05-performance-and-capacity.md)): **12.9×** con NVENC (`bench/results/accepted.json`). Nota: exigió fusionar E1+E2 (scale=area en ffmpeg cuando ninguna etapa necesita píxeles a resolución de trabajo) — la versión con reducción en NumPy daba 1.5×.
+- [x] Círculo de prueba sale circular (corrección de aspecto — `test_circle_stays_circular`).
 
 **Riesgo principal**: el overhead de transferencias y del intérprete ([05 §3](./05-performance-and-capacity.md)). Mitigación: el bench se construye *primero*, con el pipeline vacío (decode→encode passthrough), para conocer el techo de la infraestructura antes de escribir etapas.
 

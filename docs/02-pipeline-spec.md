@@ -14,6 +14,7 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 - **Entrada**: path a archivo de video. Cualquier contenedor/códec que ffmpeg soporte.
 - **Salida**: stream de frames + metadatos (`fps`, `duration`, `width`, `height`, `rotation`, `pix_fmt`) + stream de audio apartado sin decodificar.
 - **Implementación**: ffmpeg con `-hwaccel cuda` (NVDEC) cuando el códec lo soporta (h264, hevc, vp9, av1); fallback transparente a decode por software. Frames se piden en la resolución de trabajo, no la nativa: si la grilla es 160×90 celdas y cada celda muestrea 8×16 px, la resolución de trabajo es 1280×1440 — **pedir a ffmpeg el scale en GPU (`scale_cuda`) antes de bajar a RAM** para no mover frames 4K por PCIe innecesariamente.
+- **Fast path E1+E2 fusionadas** (medido en Fase 0): cuando ninguna etapa del preset necesita píxeles a resolución de trabajo (sin saliencia ni refine, i.e. preset `retro`), ffmpeg escala con `flags=area` directamente a la resolución de grilla — el promedio por celda de E2 ocurre dentro de ffmpeg y el pipe se reduce ~128×. Esto llevó el preset retro de 1.5× a ~13× tiempo real. La reducción en-engine (`to_grids`) sigue siendo el camino canónico para presets con E3/E5 y para los golden files.
 - **Metadatos críticos**: respetar el flag de `rotation` (videos de celular vienen rotados por metadata); VFR (frame rate variable) se normaliza a CFR con `fps=` filter para que la relación frame↔carácter-matrix sea 1:1.
 - **Audio**: se extrae una sola vez (`-c:a copy` a un contenedor temporal) y no se toca hasta la etapa 9.
 

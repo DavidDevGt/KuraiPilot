@@ -78,11 +78,54 @@ def convert(
         bool, typer.Option("--auto", help="Scene Analyst sugiere preset por escena.")
     ] = False,
 ) -> None:
-    """Convierte un video a video ASCII (Fase 0)."""
+    """Convierte un video a video ASCII."""
+    import time
+
+    from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
+
+    from kurai.engine.decode import DecodeError, probe_video
+    from kurai.engine.pipeline import run_job
+
     cfg = JobConfig(preset=load_preset(preset), cols=cols, output=output, auto_scene=auto)
-    console.print(f"Input: {input_file} · preset [bold]{cfg.preset.name}[/] · {cfg.cols} cols")
-    console.print(FASE_PENDIENTE)
-    raise typer.Exit(code=2)
+    try:
+        meta = probe_video(input_file)
+    except DecodeError as e:
+        console.print(f"[red]✗[/] {e}")
+        raise typer.Exit(code=1) from None
+
+    console.print(
+        f"Input: [bold]{input_file.name}[/] ({meta.width}x{meta.height} · "
+        f"{meta.fps:g} fps · {meta.duration_s:.1f}s · "
+        f"{'con' if meta.has_audio else 'sin'} audio) · "
+        f"preset [bold]{cfg.preset.name}[/] · {cfg.cols} cols"
+    )
+
+    start = time.perf_counter()
+    try:
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=console,
+        ) as bar:
+            task = bar.add_task("Convirtiendo", total=meta.n_frames)
+            result = run_job(
+                input_file, cfg, on_progress=lambda done, _: bar.update(task, completed=done)
+            )
+    except NotImplementedError as e:
+        console.print(
+            f"[yellow]El preset '{cfg.preset.name}' necesita componentes de {e} "
+            f"(docs/07-roadmap.md). Hoy: --preset retro.[/]"
+        )
+        raise typer.Exit(code=2) from None
+    except DecodeError as e:
+        console.print(f"[red]✗[/] {e}")
+        raise typer.Exit(code=1) from None
+
+    wall = time.perf_counter() - start
+    speed = meta.duration_s / wall if wall > 0 else 0.0
+    console.print(f"[bold green]✓[/] {result} ({wall:.1f}s · {speed:.1f}× tiempo real)")
 
 
 @app.command()
@@ -112,7 +155,7 @@ def bench(
         bool, typer.Option("--accept", help="Guarda este run como baseline aceptado.")
     ] = False,
 ) -> None:
-    """Benchmark de infraestructura (docs/05 §6): passthrough decode→encode."""
+    """Benchmark (docs/05 §6): passthrough (techo de I/O) + retro (gate ≥4×)."""
     import tempfile
 
     from kurai.bench import (
@@ -120,6 +163,7 @@ def bench(
         ensure_bench_clip,
         load_accepted,
         run_passthrough,
+        run_retro,
         save,
     )
 
@@ -128,32 +172,39 @@ def bench(
         console.print("[red]✗[/] ffmpeg no disponible — correr `kurai doctor`")
         raise typer.Exit(code=1)
     use_nvenc = r.hw_pipeline and not r.gpu_disabled_by_env
+    encoder = "h264_nvenc" if use_nvenc else "libx264"
 
-    console.print("Generando/cacheando clip de referencia (1080p30 · 10 s)…")
+    console.print(f"Clip de referencia (1080p30 · 10 s) · encoder [bold]{encoder}[/]")
     clip = ensure_bench_clip()
-    console.print(f"Passthrough con [bold]{'h264_nvenc' if use_nvenc else 'libx264'}[/]…")
 
+    results = []
     with tempfile.TemporaryDirectory(prefix="kurai-bench-") as tmp:
-        result = run_passthrough(clip, Path(tmp), use_nvenc=use_nvenc)
+        for name, runner_fn in (("passthrough", run_passthrough), ("retro", run_retro)):
+            result = runner_fn(clip, Path(tmp), use_nvenc)
+            results.append(result)
+            console.print(
+                f"  {name:<12} {result.frames} frames · {result.wall_seconds}s → "
+                f"[bold green]{result.speed_factor}×[/] tiempo real"
+            )
 
-    save(result, accept=accept)
-    console.print(
-        f"  {result.frames} frames · {result.wall_seconds}s wall → "
-        f"[bold green]{result.speed_factor}×[/] tiempo real"
-    )
+    save(results, accept=accept)
     if accept:
-        console.print("[green]✓[/] Baseline aceptado en bench/results/accepted.json")
+        console.print("[green]✓[/] Baselines aceptados en bench/results/accepted.json")
         return
 
-    baseline = load_accepted()
-    if baseline is None:
-        console.print(
-            "[yellow]⚠[/] Sin baseline aceptado. Si este resultado es representativo: "
-            "kurai bench --accept"
-        )
-        raise typer.Exit(code=1 if check else 0)
-    failure = check_regression(result, baseline)
-    if failure is not None:
-        console.print(f"[red]✗[/] {failure}")
-        raise typer.Exit(code=1 if check else 0)
-    console.print(f"[green]✓[/] Sin regresión (baseline {baseline.speed_factor}×)")
+    baselines = load_accepted()
+    failed = False
+    for result in results:
+        baseline = baselines.get(result.mode)
+        if baseline is None:
+            console.print(f"[yellow]⚠[/] Sin baseline para '{result.mode}' — kurai bench --accept")
+            failed = True
+            continue
+        failure = check_regression(result, baseline)
+        if failure is not None:
+            console.print(f"[red]✗[/] {result.mode}: {failure}")
+            failed = True
+        else:
+            console.print(f"[green]✓[/] {result.mode}: sin regresión ({baseline.speed_factor}×)")
+    if failed and check:
+        raise typer.Exit(code=1)

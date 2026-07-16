@@ -51,3 +51,14 @@ def test_passthrough_on_small_clip(clip_testsrc: Path, tmp_path: Path) -> None:
     assert result.speed_factor > 0
     assert result.encoder == "libx264"
     assert (tmp_path / "passthrough_out.mp4").exists()
+
+
+@pytest.mark.ffmpeg
+def test_retro_mode_on_small_clip(clip_testsrc: Path, tmp_path: Path) -> None:
+    """El modo retro del bench ejercita el pipeline completo."""
+    from kurai.bench import run_retro
+
+    result = run_retro(clip_testsrc, tmp_path, use_nvenc=False)
+    assert result.mode == "retro"
+    assert result.speed_factor > 0
+    assert (tmp_path / "retro_out.mp4").exists()

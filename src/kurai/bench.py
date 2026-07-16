@@ -90,8 +90,25 @@ def ensure_bench_clip() -> Path:
     return clip
 
 
+def _make_result(
+    mode: str, clip: Path, encoder: str, video_s: float, wall: float, frames: int
+) -> BenchResult:
+    return BenchResult(
+        mode=mode,
+        clip=clip.name,
+        encoder=encoder,
+        video_seconds=video_s,
+        wall_seconds=round(wall, 3),
+        speed_factor=round(video_s / wall, 2),
+        frames=frames,
+        commit=_git_commit(),
+        timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
+    )
+
+
 def run_passthrough(clip: Path, workdir: Path, use_nvenc: bool) -> BenchResult:
-    """Decode completo → encode completo, sin procesamiento entre medio."""
+    """Decode completo → encode completo, sin procesamiento entre medio.
+    Mide el techo de la infraestructura de I/O."""
     meta = probe_video(clip)
     audio = extract_audio(clip, workdir / "audio")
     out = workdir / "passthrough_out.mp4"
@@ -101,32 +118,42 @@ def run_passthrough(clip: Path, workdir: Path, use_nvenc: bool) -> BenchResult:
         for frame in iter_frames(clip, meta, meta.width, meta.height, hwaccel=use_nvenc):
             enc.write(frame)
     wall = time.perf_counter() - start
-
-    return BenchResult(
-        mode="passthrough",
-        clip=clip.name,
-        encoder="h264_nvenc" if use_nvenc else "libx264",
-        video_seconds=meta.duration_s,
-        wall_seconds=round(wall, 3),
-        speed_factor=round(meta.duration_s / wall, 2),
-        frames=enc.frames_written,
-        commit=_git_commit(),
-        timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
-    )
+    encoder = "h264_nvenc" if use_nvenc else "libx264"
+    return _make_result("passthrough", clip, encoder, meta.duration_s, wall, enc.frames_written)
 
 
-def load_accepted() -> BenchResult | None:
+def run_retro(clip: Path, workdir: Path, use_nvenc: bool) -> BenchResult:
+    """Pipeline completo con preset retro — el número del gate de Fase 0
+    (target ≥ 4×, docs/05 §2 / docs/07)."""
+    from kurai.config import JobConfig, load_preset
+    from kurai.engine.pipeline import run_job
+
+    meta = probe_video(clip)
+    cfg = JobConfig(preset=load_preset("retro"), cols=160, output=workdir / "retro_out.mp4")
+    start = time.perf_counter()
+    run_job(clip, cfg)
+    wall = time.perf_counter() - start
+    encoder = "h264_nvenc" if use_nvenc else "libx264"
+    return _make_result("retro", clip, encoder, meta.duration_s, wall, meta.n_frames)
+
+
+def load_accepted() -> dict[str, BenchResult]:
+    """Baselines aceptados, por modo."""
     if not ACCEPTED.exists():
-        return None
-    return BenchResult(**json.loads(ACCEPTED.read_text()))
+        return {}
+    raw = json.loads(ACCEPTED.read_text())
+    return {mode: BenchResult(**data) for mode, data in raw.items()}
 
 
-def save(result: BenchResult, accept: bool) -> None:
+def save(results: list[BenchResult], accept: bool) -> None:
+    as_dict = {r.mode: asdict(r) for r in results}
     LAST_RUN.parent.mkdir(parents=True, exist_ok=True)
-    LAST_RUN.write_text(json.dumps(asdict(result), indent=2) + "\n")
+    LAST_RUN.write_text(json.dumps(as_dict, indent=2) + "\n")
     if accept:
+        merged = {mode: asdict(r) for mode, r in load_accepted().items()}
+        merged.update(as_dict)
         ACCEPTED.parent.mkdir(parents=True, exist_ok=True)
-        ACCEPTED.write_text(json.dumps(asdict(result), indent=2) + "\n")
+        ACCEPTED.write_text(json.dumps(merged, indent=2) + "\n")
 
 
 def check_regression(result: BenchResult, baseline: BenchResult) -> str | None:

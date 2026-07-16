@@ -1,10 +1,41 @@
 #!/usr/bin/env python3
-"""Calibra las rampas midiendo la cobertura de tinta REAL de cada glifo con la
-fuente de referencia (docs/02 E4): renderiza cada candidato, cuenta píxeles
-encendidos y ordena. El resultado se versiona como código (no se recalcula en
-runtime — es parte del contrato de reproducibilidad).
+"""Verifica la calibración de las rampas: la cobertura de tinta de cada glifo
+debe ser estrictamente creciente a lo largo de la rampa (docs/02 E4).
 
-Se implementa en Fase 0 junto con la elección de fuente (Spleen vs Cozette 8×16).
+El resultado ya está versionado en src/kurai/render/glyphs.py; este tool lo
+audita e imprime la tabla. tests/test_render.py hace cumplir lo mismo en CI.
+
+Uso: uv run python tools/calibrate_ramp.py
 """
 
-raise SystemExit("Fase 0: pendiente de elección de fuente de referencia (docs/02 E8)")
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from kurai.render.glyphs import GLYPH_H, GLYPH_W, RAMPS, ink_coverage  # noqa: E402
+
+
+def main() -> int:
+    total = GLYPH_H * GLYPH_W
+    ok = True
+    for ramp, chars in RAMPS.items():
+        print(f"\nRampa '{ramp.value}' ({len(chars)} niveles):")
+        prev = -1
+        for ch in chars:
+            cov = ink_coverage(ch)
+            marker = ""
+            if cov <= prev:
+                marker = "  ✗ NO MONÓTONA"
+                ok = False
+            label = "espacio" if ch == " " else f"  '{ch}'  "
+            print(f"  {label:>9}  {cov:3d}/{total} px  ({cov / total:5.1%}){marker}")
+            prev = cov
+    print("\n✓ Todas las rampas son monótonas" if ok else "\n✗ Calibración rota")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
