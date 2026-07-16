@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>kurai preview</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; background: #0a0a0a; color: #9f9;
+      font: 13px/1.4 ui-monospace, "Cascadia Mono", monospace;
+      display: flex; height: 100vh; overflow: hidden;
+    }
+    #stage { flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; }
+    canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+    #panel {
+      width: 240px; padding: 16px; box-sizing: border-box;
+      border-left: 1px solid #1e2; background: #050505;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    #panel h1 { font-size: 14px; margin: 0 0 4px; color: #6f6; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #7c7; }
+    select, input[type=range] { width: 100%; accent-color: #6f6; background: #111; color: #9f9; border: 1px solid #253; }
+    #transport { display: flex; gap: 8px; align-items: center; }
+    button {
+      background: #0f1a0f; color: #9f9; border: 1px solid #2a4; padding: 4px 14px;
+      font: inherit; cursor: pointer;
+    }
+    button:hover { background: #16241a; }
+    #seek { flex: 1; }
+    #status { font-size: 11px; color: #575; margin-top: auto; white-space: pre-line; }
+  </style>
+</head>
+<body>
+  <div id="stage"><canvas id="canvas"></canvas></div>
+  <div id="panel">
+    <h1>kurai preview</h1>
+    <div id="transport">
+      <button id="playpause">▶</button>
+      <input id="seek" type="range" min="0" max="0" value="0" step="1">
+    </div>
+    <label>Columnas <span id="cols-val"></span>
+      <input id="cols" type="range" min="20" max="200" value="120" step="4">
+    </label>
+    <label>Rampa
+      <select id="ramp">
+        <option value="short">short (ASCII)</option>
+        <option value="blocks">blocks (Unicode)</option>
+      </select>
+    </label>
+    <label>Gamma <span id="gamma-val"></span>
+      <input id="gamma" type="range" min="0.3" max="1.5" value="0.8" step="0.05">
+    </label>
+    <label>Color
+      <select id="color">
+        <option value="mono">mono (verde fósforo)</option>
+        <option value="fg">fg (color por celda)</option>
+      </select>
+    </label>
+    <div id="status">conectando…</div>
+  </div>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

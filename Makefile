@@ -2,8 +2,8 @@
 
 .PHONY: setup setup-gpu test test-cpu lint type arch check doctor models bench hooks
 
-setup:            ## Entorno base (sin GPU extras)
-	uv sync
+setup:            ## Entorno base + preview (sin GPU extras)
+	uv sync --extra preview
 
 hooks:            ## Activa los git hooks del repo (pre-push corre make check)
 	git config core.hooksPath .githooks

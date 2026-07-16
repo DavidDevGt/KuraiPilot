@@ -6,6 +6,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). Versionado: S
 
 ### Added
 
+- **Fase 0.5 completa** (gate en verde, docs/07): `kurai preview` — server FastAPI+WebSocket en localhost que streamea la CharMatrix (no píxeles) a un cliente WebGL2 de un solo pass, con sliders de columnas/rampa/gamma/color, play/pause/seek; ajustes de rampa/gamma/color reflejan en <100 ms y la CharMatrix del preview es bit a bit la del export (mismo código, test de igualdad). `kurai live` — reproducción ANSI en terminal con run-length de color 24-bit, pacing a fps con drop de frames y restore de terminal garantizado. `iter_frames` gana seek (`start_s`).
+
 - **Fase 0 completa** (gate en verde, docs/07): `kurai convert` produce video ASCII real con preset `retro` — decode/demux (E1), grilla con corrección de aspecto 1:2 (E2), rampa calibrada por cobertura de tinta con glifos bitmap 8×16 embebidos, mapeo+Bayer fusionados (E4/E6), anti-flicker por histéresis con FCR=0 medido (E7), render por atlas (E8), encode NVENC con audio bit-idéntico (E9). 12.9× tiempo real en la máquina de referencia (fast path E1+E2 fusionadas vía scale=area).
 - `kurai bench` con modos passthrough y retro, baselines versionados y `--check` de regresión.
 

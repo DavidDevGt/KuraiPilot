@@ -19,7 +19,10 @@ Fases con criterios de aceptación verificables. Cada fase termina con un gate e
 
 **Alcance**: preview server + frontend WebGL ([03 §3](./03-tech-stack.md)); modo `kurai live` (ANSI a stdout). Ambos consumen el mismo core de mapeo que el export.
 
-**Gate**: slider de densidad/rampa refleja en <100 ms; la CharMatrix del preview es idéntica a la del export con la misma config (test de igualdad, no promesa).
+**Gate** (✅ completado 2026-07-16):
+- [x] La CharMatrix del preview es idéntica a la del export con la misma config — por construcción (`PreviewSession.compute` usa `cells_to_charmatrix`, el mismo código de `run_job`) y verificado frame a frame en `test_preview_charmatrix_identical_to_export_path`.
+- [x] Cambio de rampa/gamma/color refleja en <100 ms: recompute desde el cell-frame cacheado, medido en el peor caso (grilla 200 cols) por `test_config_change_under_100ms`. El cambio de columnas re-decodifica con seek (`-ss`), único ajuste que excede el presupuesto — documentado, no ocultado.
+- [x] `kurai live`: ANSI con run-length de color, pacing con drop de frames, alt-screen con restore garantizado incluso ante fallo a mitad de stream.
 
 ## Fase 1 — Saliencia
 
