@@ -21,7 +21,11 @@ Trunk-based con ramas cortas:
 3. PR contra `main`. La plantilla de PR pide lo que el reviewer necesita; completala de verdad.
 4. Merge con squash. `main` siempre está en verde y siempre es instalable.
 
-Configuración recomendada de branch protection en GitHub (el owner la aplica una vez): requerir el workflow `CI` en verde, 1 review aprobado, historial lineal, sin push directo a `main`.
+La configuración del repo (branch protection, squash-only, auto-delete de ramas, labels) se aplica con [`tools/setup_github.sh`](./tools/setup_github.sh) — idempotente, requiere `gh` autenticado con admin. Si un check requerido cambia de nombre en `ci.yml`, actualizar el script en el mismo PR.
+
+### Labels
+
+Las fases del roadmap son labels (`fase-0` … `fase-3`) para que el tablero refleje [docs/07](./docs/07-roadmap.md). `hot-path` marca PRs que exigen bench adjunto; `adr` marca propuestas de decisión estructural; `golden` marca cambios a golden files. `good first issue` se reserva para tareas acotadas que no necesitan GPU.
 
 ## Los tres gates (en orden de cercanía)
 

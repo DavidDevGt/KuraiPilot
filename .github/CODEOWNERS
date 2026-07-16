@@ -1,37 +1,36 @@
 # Ownership por área (docs/01 §3). GitHub exige review del owner en cada PR
 # que toque su área (con branch protection + "Require review from Code Owners").
 #
-# NOTA: reemplazar @rou por el/los handles reales de GitHub al crear el remote.
-# Cuando existan equipos, usar teams (@org/engine-team) en vez de individuos.
+# Cuando existan equipos, migrar a teams de la org (@org/engine-team).
 
 # Default: todo lo no listado
-*                       @rou
+*                       @DavidDevGt
 
 # Arquitectura y decisiones — el corazón normativo del proyecto
-/docs/                  @rou
-/docs/adr/              @rou
-/CLAUDE.md              @rou
-/CONTRIBUTING.md        @rou
+/docs/                  @DavidDevGt
+/docs/adr/              @DavidDevGt
+/CLAUDE.md              @DavidDevGt
+/CONTRIBUTING.md        @DavidDevGt
 
 # Core del pipeline (etapas deterministas)
-/src/kurai/engine/      @rou
-/src/kurai/render/      @rou
-/src/kurai/types.py     @rou
+/src/kurai/engine/      @DavidDevGt
+/src/kurai/render/      @DavidDevGt
+/src/kurai/types.py     @DavidDevGt
 
 # Componentes con IA (docs/04 es normativo para esta área)
-/src/kurai/ai/          @rou
-/models/                @rou
-/training/              @rou
+/src/kurai/ai/          @DavidDevGt
+/models/                @DavidDevGt
+/training/              @DavidDevGt
 
 # Superficies de usuario
-/src/kurai/cli.py       @rou
-/src/kurai/preview/     @rou
-/frontend/              @rou
+/src/kurai/cli.py       @DavidDevGt
+/src/kurai/preview/     @DavidDevGt
+/frontend/              @DavidDevGt
 
 # Infraestructura de calidad — cambios acá afectan a todos los equipos
-/.github/               @rou
-/tests/conftest.py      @rou
-/tests/golden/          @rou
-/pyproject.toml         @rou
-/uv.lock                @rou
-/presets/               @rou
+/.github/               @DavidDevGt
+/tests/conftest.py      @DavidDevGt
+/tests/golden/          @DavidDevGt
+/pyproject.toml         @DavidDevGt
+/uv.lock                @DavidDevGt
+/presets/               @DavidDevGt
