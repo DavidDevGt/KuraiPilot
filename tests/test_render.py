@@ -10,6 +10,26 @@ from kurai.render.glyphs import GLYPH_H, GLYPH_W, RAMPS, bitmap, ink_coverage, r
 from kurai.types import CharMatrix
 
 
+def test_atlas_hash_guard() -> None:
+    """Los bitmaps de los glifos son parte del contrato de reproducibilidad G4:
+    cambiar un píxel de un glifo cambia TODO output renderizado. Este hash
+    obliga a que ese cambio sea explícito (actualizar el hash en el mismo
+    commit, con justificación — misma regla que los golden, docs/06 §1)."""
+    import hashlib
+
+    expected = {
+        Ramp.SHORT: "c0597ce5767a5c3c",
+        Ramp.BLOCKS: "67040e440398d08e",
+    }
+    for ramp, digest in expected.items():
+        atlas = build_atlas(ramp_chars(ramp))
+        actual = hashlib.sha256(atlas.tobytes()).hexdigest()[:16]
+        assert actual == digest, (
+            f"Atlas '{ramp.value}' cambió ({actual}): si es intencional, "
+            f"actualizar el hash y justificar en el commit"
+        )
+
+
 def test_all_ramps_strictly_monotonic_by_ink_coverage() -> None:
     """La calibración de docs/02 E4: más índice de rampa = más tinta, siempre."""
     for ramp, chars in RAMPS.items():

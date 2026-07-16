@@ -46,6 +46,26 @@ def _guard_phase(cfg: JobConfig) -> None:
         raise NotImplementedError("Fase 3")
 
 
+def cells_to_charmatrix(
+    cell_frame: npt.NDArray[np.uint8],
+    state: HysteresisState,
+    offsets: npt.NDArray[np.float32],
+    levels: int,
+    gamma: float,
+) -> CharMatrix:
+    """Etapas 4-7 sobre un frame ya reducido a celdas (rows, cols, 3).
+
+    El núcleo compartido del fast path de run_job y de los tests que alimentan
+    frames decodificados reales (con ruido de códec incluido).
+    """
+    color_grid = cell_frame.astype(np.float32) * np.float32(1.0 / 255.0)
+    luma_grid = (color_grid @ LUMA_WEIGHTS).astype(np.float32)
+    lg = apply_gamma(luma_grid, gamma)
+    state.detect_scene_cut(lg)
+    idx = state.apply(lg, quantize(lg, levels, offsets), levels)
+    return CharMatrix(char_idx=idx, fg=np.ascontiguousarray(cell_frame))
+
+
 def run_job(
     input_file: Path,
     cfg: JobConfig,
@@ -91,12 +111,7 @@ def run_job(
             for i, cell_frame in enumerate(
                 iter_frames(input_file, meta, cols, rows, hwaccel=use_hw)
             ):
-                color_grid = cell_frame.astype(np.float32) * np.float32(1.0 / 255.0)
-                luma_grid = (color_grid @ LUMA_WEIGHTS).astype(np.float32)
-                lg = apply_gamma(luma_grid, cfg.preset.gamma)
-                state.detect_scene_cut(lg)
-                idx = state.apply(lg, quantize(lg, levels, offsets), levels)
-                cm = CharMatrix(char_idx=idx, fg=cell_frame)
+                cm = cells_to_charmatrix(cell_frame, state, offsets, levels, cfg.preset.gamma)
                 enc.write(compose(cm, atlas, cfg.preset.color))
                 if on_progress is not None:
                     on_progress(i + 1, meta.n_frames)

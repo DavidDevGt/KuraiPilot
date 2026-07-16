@@ -17,6 +17,9 @@ test:
 test-cpu:         ## La suite exactamente como la corre CI (sin GPU)
 	KURAI_DISABLE_GPU=1 uv run pytest -v
 
+cov:              ## Suite con coverage y umbral (igual que CI)
+	uv run pytest --cov --cov-report=term-missing:skip-covered
+
 lint:
 	uv run ruff check . && uv run ruff format --check .
 

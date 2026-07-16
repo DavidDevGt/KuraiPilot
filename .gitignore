@@ -33,3 +33,8 @@ frontend/dist/
 training/runs/
 training/*.ckpt
 training/*.pth
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from kurai import __version__
@@ -54,6 +55,17 @@ def test_pending_commands_exit_2_not_crash(tmp_path: Path) -> None:
     for args in (["preview", str(f)], ["live"]):
         result = runner.invoke(app, args)
         assert result.exit_code == 2, f"{args}: {result.output}"
+
+
+@pytest.mark.ffmpeg
+def test_convert_cli_happy_path(clip_testsrc: Path, tmp_path: Path) -> None:
+    """El camino feliz por la superficie del CLI (progreso incluido), no solo
+    por run_job directo."""
+    out = tmp_path / "cli_out.mp4"
+    result = runner.invoke(app, ["convert", str(clip_testsrc), "--cols", "40", "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert "tiempo real" in result.output
 
 
 def test_convert_garbage_input_is_clean_error(tmp_path: Path) -> None:

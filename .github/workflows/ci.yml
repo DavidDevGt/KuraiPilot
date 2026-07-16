@@ -1,7 +1,8 @@
-# CI de KuraiPilot — gates de calidad en runner CPU (docs/06 §5).
+# CI de KuraiPilot — gates de calidad en runner CPU (docs/06 §5b).
 #
-# Qué corre acá: lint, formato, tipos, y toda la suite con KURAI_DISABLE_GPU=1
-# (los tests marcados `gpu` se saltan solos vía conftest).
+# Qué corre acá: lint, formato, tipos, fronteras de arquitectura, y toda la
+# suite con KURAI_DISABLE_GPU=1 + coverage con umbral (los tests `gpu` se
+# saltan solos vía conftest).
 # Qué NO corre acá (por diseño, ADR-001): `kurai bench` y los tests `gpu` —
 # solo valen en la máquina de referencia; el gate local es `make check` + hooks.
 
@@ -11,6 +12,9 @@ on:
   push:
     branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,6 +27,7 @@ jobs:
   quality:
     name: lint + format + types
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -40,8 +45,9 @@ jobs:
         run: uv run lint-imports
 
   test:
-    name: pytest (py${{ matrix.python }})
+    name: pytest + coverage (py${{ matrix.python }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -56,7 +62,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Sync (frozen lockfile)
         run: uv sync --frozen
-      - name: Run suite
-        run: uv run pytest -v
+      - name: Run suite con coverage (umbral en pyproject)
+        run: uv run pytest --cov --cov-report=term-missing:skip-covered
+      - name: Goldens regenerables (make_goldens produce lo mismo que está commiteado)
+        run: |
+          uv run python tools/make_goldens.py
+          uv run pytest tests/test_pipeline.py::test_gradient_golden -q
+      - name: Calibración de rampas auditada
+        run: uv run python tools/calibrate_ramp.py
       - name: Doctor (smoke del probe en runner sin GPU)
         run: uv run kurai doctor
