@@ -1,0 +1,26 @@
+name: Feature / mejora
+description: Proponer funcionalidad o mejora
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta
+      description: Qué y para qué. Si toca el pipeline, indicá qué etapa (docs/02) o si es una etapa nueva.
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: ¿Involucra un modelo de IA?
+      description: Si sí, aplica el marco de docs/04 (presupuestos de hot path, criterio de aceptación medible contra baseline determinista, ADR-002).
+      options:
+        - "No"
+        - "Sí — propongo el criterio de aceptación medible abajo"
+    validations:
+      required: true
+  - type: textarea
+    id: fit
+    attributes:
+      label: Encaje con el roadmap y las decisiones existentes
+      description: ¿En qué fase encaja (docs/07)? ¿Contradice algún ADR? (Si contradice, esto es una propuesta de ADR nuevo, no un feature.)

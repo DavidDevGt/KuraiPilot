@@ -6,7 +6,8 @@ Conversor local-first de video a video ASCII renderizado. **Toda la documentaci�
 
 ```bash
 make setup      # uv sync (entorno base, sin GPU extras)
-make check      # gate local: ruff + mypy strict + pytest (= lo que exige CI)
+make check      # gate local: ruff + mypy strict + import-linter + pytest (= CI)
+make arch       # solo las fronteras de arquitectura (import-linter)
 make test-cpu   # la suite exactamente como la corre CI (KURAI_DISABLE_GPU=1)
 make hooks      # activa .githooks (pre-push corre make check)
 make doctor     # verifica ffmpeg/NVDEC/NVENC/GPU/Ollama (correr en máquina nueva)
@@ -35,6 +36,7 @@ Correr un solo test: `uv run pytest tests/test_grid.py::test_nombre -v`
 
 ## Reglas duras (violarlas = rechazar el cambio)
 
+0. **Capas de arquitectura (docs/01 §3)**: los imports respetan las capas — `cli → preview → engine → (ai|render) → (config|types|probe)`. Lo valida `import-linter` en `make check` y CI; si un cambio necesita romper una capa, el diseño del cambio está mal, no el linter.
 1. **Vectorización estricta (ADR-006)**: en etapas 2-8 del pipeline, prohibido iterar por píxel o celda en Python. Todo es NumPy/CuPy sobre arrays completos o batch ONNX. Única excepción: Floyd-Steinberg (`engine/dither.py`), que es secuencial por naturaleza.
 2. **Determinismo (ADR-002 / G4)**: mismo input + misma config ⇒ CharMatrix bit a bit idéntica. Nada de `random` sin semilla fija, nada de depender de orden de dict/set, nada de tiempo del sistema en el pipeline.
 3. **La CharMatrix es el artefacto canónico** (`src/kurai/types.py`): los tests golden comparan CharMatrix con igualdad exacta, nunca video encodeado ni con tolerancia.
@@ -43,6 +45,10 @@ Correr un solo test: `uv run pytest tests/test_grid.py::test_nombre -v`
 6. **ffmpeg es la única frontera de video (ADR-003)**: nada más abre archivos de video. Audio siempre `-c:a copy`.
 7. **Render por atlas**: prohibido dibujar texto carácter por carácter (PIL/Cairo) en el hot path — solo fancy indexing sobre el atlas pre-renderizado.
 8. **Golden files**: actualizar un golden requiere justificar en el commit el cambio de algoritmo que lo motiva. Un golden que cambia "solo" es una regresión.
+
+## Trabajo en equipo
+
+Flujo de contribución, gates, proceso ADR y ownership: [CONTRIBUTING.md](./CONTRIBUTING.md). Resumen operativo: ramas cortas desde `main` (`tipo/descripcion`), PR con la plantilla completada, squash merge, `main` siempre verde. Un cambio de preset toca tres lugares en el mismo PR (TOML + docs/02 §10 + `SPEC_TABLE`); un cambio al hot path adjunta bench de la máquina de referencia.
 
 ## Convenciones
 

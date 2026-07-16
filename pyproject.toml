@@ -38,6 +38,7 @@ dev = [
     "hypothesis>=6.100",
     "ruff>=0.8",
     "mypy>=1.13",
+    "import-linter>=2.0",
 ]
 
 [project.scripts]
@@ -67,6 +68,23 @@ mypy_path = "src"
 # El sidecar y render usan libs sin stubs completos; estricto igual en firmas propias
 module = ["cupy.*", "onnxruntime.*", "cv2.*"]
 ignore_missing_imports = true
+
+# Capas de docs/01 §3 como contrato ejecutable: un import que viole la
+# arquitectura falla en CI, no en la review. Cambiar una capa = cambiar docs/01.
+[tool.importlinter]
+root_package = "kurai"
+
+[[tool.importlinter.contracts]]
+name = "Capas de la arquitectura (docs/01 §3)"
+type = "layers"
+exhaustive = false
+layers = [
+    "kurai.cli",
+    "kurai.preview",
+    "kurai.engine",
+    "kurai.ai | kurai.render",
+    "kurai.config | kurai.types | kurai.probe",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

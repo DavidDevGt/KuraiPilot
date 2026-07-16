@@ -1,6 +1,6 @@
 # Carretera de desarrollo. `make check` es el gate local (= lo que exige CI).
 
-.PHONY: setup setup-gpu test test-cpu lint type check doctor models bench hooks
+.PHONY: setup setup-gpu test test-cpu lint type arch check doctor models bench hooks
 
 setup:            ## Entorno base (sin GPU extras)
 	uv sync
@@ -23,7 +23,10 @@ lint:
 type:
 	uv run mypy
 
-check: lint type test  ## Gate completo: lint + tipos + tests
+arch:             ## Fronteras de arquitectura (docs/01 §3) como contrato
+	uv run lint-imports
+
+check: lint type arch test  ## Gate completo: lint + tipos + arquitectura + tests
 
 doctor:
 	uv run kurai doctor
