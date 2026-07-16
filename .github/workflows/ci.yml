@@ -1,0 +1,60 @@
+# CI de KuraiPilot — gates de calidad en runner CPU (docs/06 §5).
+#
+# Qué corre acá: lint, formato, tipos, y toda la suite con KURAI_DISABLE_GPU=1
+# (los tests marcados `gpu` se saltan solos vía conftest).
+# Qué NO corre acá (por diseño, ADR-001): `kurai bench` y los tests `gpu` —
+# solo valen en la máquina de referencia; el gate local es `make check` + hooks.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KURAI_DISABLE_GPU: "1"
+
+jobs:
+  quality:
+    name: lint + format + types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync (frozen lockfile)
+        run: uv sync --frozen
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+      - name: Mypy (strict)
+        run: uv run mypy
+
+  test:
+    name: pytest (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ffmpeg (fixtures sintéticos lavfi)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+      - name: Sync (frozen lockfile)
+        run: uv sync --frozen
+      - name: Run suite
+        run: uv run pytest -v
+      - name: Doctor (smoke del probe en runner sin GPU)
+        run: uv run kurai doctor

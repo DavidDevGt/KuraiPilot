@@ -6,17 +6,27 @@ Conversor local-first de video a video ASCII renderizado. **Toda la documentaci�
 
 ```bash
 make setup      # uv sync (entorno base, sin GPU extras)
-make check      # gate pre-commit: ruff + mypy strict + pytest
+make check      # gate local: ruff + mypy strict + pytest (= lo que exige CI)
+make test-cpu   # la suite exactamente como la corre CI (KURAI_DISABLE_GPU=1)
+make hooks      # activa .githooks (pre-push corre make check)
 make doctor     # verifica ffmpeg/NVDEC/NVENC/GPU/Ollama (correr en máquina nueva)
 make setup-gpu  # extras GPU (onnxruntime-gpu, cupy) — solo desde Fase 1
 ```
 
-Correr un solo test: `uv run pytest tests/test_smoke.py::test_nombre -v`
+Correr un solo test: `uv run pytest tests/test_grid.py::test_nombre -v`
+
+## Testing y CI
+
+- Tests por módulo en `tests/` (cli, config, grid, types, probe, contracts, media_fixtures); fixtures compartidos en `tests/conftest.py` — frames sintéticos deterministas y clips generados con ffmpeg lavfi por sesión (nunca binarios de video al repo).
+- Marcadores: `gpu` (se salta sin GPU / con `KURAI_DISABLE_GPU=1`) y `ffmpeg` (se salta sin ffmpeg). `--strict-markers` activo: un marcador nuevo se declara en `pyproject.toml`.
+- Property-based con Hypothesis para funciones puras de geometría/cuantización (ver `tests/test_grid.py` como patrón).
+- `tests/test_config.py` duplica la tabla de presets de `docs/02 §10` como dato: preset nuevo o cambiado ⇒ actualizar docs y esa tabla, el sync es deliberadamente manual.
+- CI (GitHub Actions) corre solo corrección en CPU; performance y camino CUDA se validan solo en la máquina de referencia (`docs/06 §5b`). No agregar jobs con GPU ni bench a CI.
 
 ## Dónde está cada verdad
 
 | Pregunta | Fuente |
-|---|---|
+| --- | --- |
 | Qué hace cada etapa del pipeline, contratos E/S | `docs/02-pipeline-spec.md` (normativo) |
 | Qué modelo de IA corre dónde, presupuestos | `docs/04-ai-components.md` (normativo) |
 | Por qué se decidió X | `docs/adr/` — los ADRs no se editan; se supersede con uno nuevo |

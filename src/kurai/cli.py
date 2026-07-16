@@ -23,7 +23,7 @@ console = Console()
 FASE_PENDIENTE = "[yellow]Aún no implementado[/] — fase pendiente del roadmap (docs/07-roadmap.md)."
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def _main(
     version: Annotated[bool, typer.Option("--version", help="Muestra la versión y sale.")] = False,
 ) -> None:

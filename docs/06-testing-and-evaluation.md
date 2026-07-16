@@ -26,7 +26,7 @@ Cobertura mínima obligatoria por etapa (pytest, sin GPU en CI — camino `KURAI
 
 La métrica que gobierna la Etapa 7 y su escalera de complejidad ([04 §4](./04-ai-components.md)):
 
-```
+```text
 FCR (Flicker Change Rate) = cambios de char_idx por celda por segundo,
                             medido SOLO en celdas estáticas
 ```
@@ -44,6 +44,16 @@ FCR (Flicker Change Rate) = cambios de char_idx por celda por segundo,
 ## 5. Performance como test
 
 La regresión de performance es un fallo de test: `kurai bench` en modo `--check` compara contra el último resultado aceptado en `bench/results/` y falla si algún preset cae >10% en speed factor o alguna etapa excede su presupuesto de [05 §3](./05-performance-and-capacity.md). Corre pre-merge en la máquina de referencia (no hay CI con GPU equivalente; el bench es local por diseño — [ADR-001](./adr/ADR-001-local-first.md)).
+
+## 5b. CI y gates locales (dónde corre qué)
+
+| Gate | Dónde | Qué cubre |
+|---|---|---|
+| GitHub Actions (`.github/workflows/ci.yml`) | Runner CPU, push/PR a main | ruff + formato + mypy strict + suite completa con `KURAI_DISABLE_GPU=1` en Python 3.12 y 3.13, con ffmpeg instalado (los fixtures lavfi y el camino de degradación CPU se ejercitan de verdad) |
+| `make check` / hook pre-push (`make hooks`) | Máquina de desarrollo | Lo mismo que CI, antes de que salga el push |
+| `kurai bench --check` + tests `gpu` | Solo máquina de referencia | Performance y camino CUDA — CI nunca los ve |
+
+Los tests se marcan con `gpu` (se saltan solos sin GPU o con `KURAI_DISABLE_GPU=1`) o `ffmpeg` (se saltan sin ffmpeg en PATH); el reparto lo hace `tests/conftest.py`. Consecuencia deliberada: **CI verifica corrección y degradación; jamás performance** — un verde en Actions no dice nada sobre los targets de [05](./05-performance-and-capacity.md).
 
 ## 6. Qué NO se testea automáticamente (y qué se hace en su lugar)
 
