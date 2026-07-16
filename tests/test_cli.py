@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from kurai import __version__
@@ -47,9 +48,30 @@ def test_convert_unknown_preset_fails_listing_available(tmp_path: Path) -> None:
 
 
 def test_pending_commands_exit_2_not_crash(tmp_path: Path) -> None:
-    """Los subcomandos de fases pendientes salen con código 2, nunca traceback."""
+    """Los subcomandos de fases pendientes salen con código 2, nunca traceback.
+    (convert y bench ya no están acá: se implementaron en Fase 0.)"""
     f = tmp_path / "x.mp4"
     f.write_bytes(b"\x00")
-    for args in (["convert", str(f)], ["preview", str(f)], ["live"], ["bench"]):
+    for args in (["preview", str(f)], ["live"]):
         result = runner.invoke(app, args)
         assert result.exit_code == 2, f"{args}: {result.output}"
+
+
+@pytest.mark.ffmpeg
+def test_convert_cli_happy_path(clip_testsrc: Path, tmp_path: Path) -> None:
+    """El camino feliz por la superficie del CLI (progreso incluido), no solo
+    por run_job directo."""
+    out = tmp_path / "cli_out.mp4"
+    result = runner.invoke(app, ["convert", str(clip_testsrc), "--cols", "40", "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert "tiempo real" in result.output
+
+
+def test_convert_garbage_input_is_clean_error(tmp_path: Path) -> None:
+    """Un input que no es video sale con error accionable, no traceback."""
+    f = tmp_path / "garbage.mp4"
+    f.write_bytes(b"\x00")
+    result = runner.invoke(app, ["convert", str(f)])
+    assert result.exit_code == 1
+    assert result.exception is None or isinstance(result.exception, SystemExit)

@@ -35,6 +35,7 @@ scene = [
 dev = [
     "pytest>=8.0",
     "pytest-benchmark>=4.0",
+    "pytest-cov>=6.0",
     "hypothesis>=6.100",
     "ruff>=0.8",
     "mypy>=1.13",
@@ -84,6 +85,21 @@ layers = [
     "kurai.engine",
     "kurai.ai | kurai.render",
     "kurai.config | kurai.types | kurai.probe",
+]
+
+[tool.coverage.run]
+source = ["kurai"]
+# Módulos 100% stub de fases futuras (docs/07): se sacan del omit cuando su
+# fase se implementa — medirlos hoy solo distorsiona el número.
+omit = ["*/preview/*", "*/ai/*"]
+
+[tool.coverage.report]
+# El umbral es un piso de no-regresión, no una meta: subirlo al implementar
+# fases, nunca bajarlo para hacer pasar un PR.
+fail_under = 85
+exclude_also = [
+    "raise NotImplementedError",  # stubs de fases futuras (docs/07)
+    "if TYPE_CHECKING:",
 ]
 
 [tool.pytest.ini_options]

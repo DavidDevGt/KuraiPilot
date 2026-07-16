@@ -1,0 +1,24 @@
+{
+  "passthrough": {
+    "mode": "passthrough",
+    "clip": "ref_1920x1080_30fps_10s.mp4",
+    "encoder": "h264_nvenc",
+    "video_seconds": 10.0,
+    "wall_seconds": 1.079,
+    "speed_factor": 9.27,
+    "frames": 300,
+    "commit": "848d31a",
+    "timestamp": "2026-07-16T04:21:09+00:00"
+  },
+  "retro": {
+    "mode": "retro",
+    "clip": "ref_1920x1080_30fps_10s.mp4",
+    "encoder": "h264_nvenc",
+    "video_seconds": 10.0,
+    "wall_seconds": 0.772,
+    "speed_factor": 12.95,
+    "frames": 300,
+    "commit": "848d31a",
+    "timestamp": "2026-07-16T04:21:10+00:00"
+  }
+}

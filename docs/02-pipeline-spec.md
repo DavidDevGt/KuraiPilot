@@ -14,6 +14,7 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 - **Entrada**: path a archivo de video. Cualquier contenedor/códec que ffmpeg soporte.
 - **Salida**: stream de frames + metadatos (`fps`, `duration`, `width`, `height`, `rotation`, `pix_fmt`) + stream de audio apartado sin decodificar.
 - **Implementación**: ffmpeg con `-hwaccel cuda` (NVDEC) cuando el códec lo soporta (h264, hevc, vp9, av1); fallback transparente a decode por software. Frames se piden en la resolución de trabajo, no la nativa: si la grilla es 160×90 celdas y cada celda muestrea 8×16 px, la resolución de trabajo es 1280×1440 — **pedir a ffmpeg el scale en GPU (`scale_cuda`) antes de bajar a RAM** para no mover frames 4K por PCIe innecesariamente.
+- **Fast path E1+E2 fusionadas** (medido en Fase 0): cuando ninguna etapa del preset necesita píxeles a resolución de trabajo (sin saliencia ni refine, i.e. preset `retro`), ffmpeg escala con `flags=area` directamente a la resolución de grilla — el promedio por celda de E2 ocurre dentro de ffmpeg y el pipe se reduce ~128×. Esto llevó el preset retro de 1.5× a ~13× tiempo real. La reducción en-engine (`to_grids`) sigue siendo el camino canónico para presets con E3/E5 y para los golden files.
 - **Metadatos críticos**: respetar el flag de `rotation` (videos de celular vienen rotados por metadata); VFR (frame rate variable) se normaliza a CFR con `fps=` filter para que la relación frame↔carácter-matrix sea 1:1.
 - **Audio**: se extrae una sola vez (`-c:a copy` a un contenedor temporal) y no se toca hasta la etapa 9.
 
@@ -82,6 +83,11 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 - **Entrada**: stream de frames RGB + audio apartado de la Etapa 1.
 - **Salida**: `output.mp4` (h264 por compatibilidad) o `output.webm`.
 - **Implementación**: ffmpeg NVENC (`h264_nvenc`, preset `p5`, CQ configurable). El contenido ASCII es de alta frecuencia espacial y detalle fino: usar `-tune hq` y CQ ≤ 23 o los glifos se vuelven papilla con la compresión. Audio: `-c:a copy` — el audio original se muxea sin recodificar; solo se recodifica si el contenedor de destino no soporta el códec original.
+- **Prácticas obligatorias auditadas contra la industria** (Fase 0):
+  - NVENC en calidad constante real exige `-b:v 0` junto a `-cq`; sin eso el bitrate queda capado al default y `-cq` es decorativo.
+  - La conversión RGB→YUV se fija a BT.709 (`scale=out_color_matrix=bt709:out_range=tv:flags=full_chroma_int+accurate_rnd`) y se taguea el VUI completo vía `setparams` — swscale usa BT.601 por defecto y los players HD asumen BT.709 (color corrido sin esto).
+  - El frame rate viaja como racional exacto (`30000/1001`) por `fps=` y `-r`, nunca como float formateado (drift en videos largos).
+  - `stderr` de los subprocess ffmpeg va a archivo temporal, jamás a PIPE sin lector concurrente (deadlock cuando el buffer del pipe se llena de warnings).
 - **Sincronía**: la normalización a CFR de la Etapa 1 garantiza que `n_frames_out = n_frames_in`; el PTS del primer frame se preserva.
 
 ## 10. Presets (mapeo a etapas)

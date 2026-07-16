@@ -16,12 +16,20 @@ class VideoMeta:
 
     width: int
     height: int
-    fps: float  # ya normalizado a CFR
+    fps: float  # ya normalizado a CFR; solo para cálculo/display
     n_frames: int
     duration_s: float
     rotation: int  # grados; debe estar ya aplicado en decode
     has_audio: bool
     codec: str
+    # Racional exacto ("30000/1001") para los filtros fps= y -r de ffmpeg:
+    # el float formateado acumula drift en videos largos. Vacío = usar fps.
+    fps_rational: str = ""
+
+    @property
+    def fps_expr(self) -> str:
+        """La expresión de frame rate que se pasa a ffmpeg."""
+        return self.fps_rational or f"{self.fps}"
 
 
 @dataclass
