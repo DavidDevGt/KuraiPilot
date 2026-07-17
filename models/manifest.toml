@@ -6,10 +6,11 @@
 # descarga y el pipeline degrada al modo determinista.
 
 [models.saliency]
-# U2Net-lite (ADR-004). Pinear en Fase 1.
+# U2Net-lite (ADR-004). Variante "u2netp" (~4.6 MB), release de rembg (Apache-2.0).
+# Salida directa: mapa de saliencia [0,1], entrada 320×320. Pineado en Fase 1.
 filename = "u2net_lite.onnx"
-url = ""
-sha256 = ""
+url = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
+sha256 = "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8"
 
 [models.glyph_cnn]
 # CNN propia entrenada en training/ y exportada a ONNX. Pinear en Fase 2.

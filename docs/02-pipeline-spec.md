@@ -28,7 +28,7 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 
 ## Etapa 3 — Saliencia (opcional-IA)
 
-- **Entrada**: frame RGB reducido a 320×320 (entrada del modelo).
+- **Entrada**: frame RGB reducido a 320×320 (entrada del modelo). Implementación Fase 1: se re-muestrea la grilla RGB ya reducida (E1+E2 fusionadas) a 320×320 — el `density_map` es de resolución de grilla de todos modos; la saliencia a resolución de trabajo es un refinamiento futuro.
 - **Salida**: `density_map: float32[rows, cols]` en [0,1] — 1.0 = máximo detalle.
 - **Modelo y scheduling**: normativo en [04 §2](./04-ai-components.md). Corre cada N frames (default N=5) con propagación del mapa entre corridas.
 - **Efecto downstream**: el `density_map` modula (a) la longitud efectiva de la rampa en Etapa 4 — zonas de baja densidad usan una rampa corta de 4 niveles, zonas salientes la rampa completa — y (b) la subdivisión de celda en presets altos (una celda de fondo puede representar 2×2 celdas fusionadas).

@@ -28,10 +28,10 @@ Fases con criterios de aceptación verificables. Cada fase termina con un gate e
 
 **Alcance**: Etapa 3 con U2Net-lite ONNX ([04 §2](./04-ai-components.md)), scheduling cada 5 frames, preset `detallado` (incluye E5-`edges`, que es determinista y entra aquí). `tools/fetch_models.py` con hashes pineados. Degradación limpia sin modelos.
 
-**Gate**:
-- [ ] A/B ≥ 60% de preferencia con vs. sin saliencia en el set curado ([06 §4](./06-testing-and-evaluation.md)) — **este gate puede fallar**: la hipótesis de que la densidad no uniforme mejora la percepción es la apuesta central de IDEA.md y se valida aquí o se abandona.
-- [ ] Speed factor ≥ 2× en `detallado`.
-- [ ] Job completa con warning si los modelos no están (test de degradación en verde).
+**Gate** (implementación completa; el A/B es de juicio humano por diseño):
+- [ ] A/B ≥ 60% de preferencia con vs. sin saliencia en el set curado ([06 §4](./06-testing-and-evaluation.md)) — **este gate puede fallar**: la hipótesis de que la densidad no uniforme mejora la percepción es la apuesta central de IDEA.md y se valida aquí o se abandona. **Pendiente de veredicto humano**: el material A/B (retro vs. detallado en los 7 clips de prueba) está generado en `output/*__{retro,detallado}.mp4` y las comparaciones lado a lado en `output/ab/`; falta la votación ciega sobre el set curado.
+- [x] Speed factor ≥ 2× en `detallado`: **3.6×** con inferencia GPU (CUDAExecutionProvider) en la máquina de referencia (jellyfish 1080p; U2Net-lite cada 5 frames domina el costo). Con inferencia CPU baja a 1.4× — el gate exige el path GPU (extra `gpu`, `onnxruntime-gpu`). Clips muy densos (1080p60, vertical 30fps) quedan en ~2.0×.
+- [x] Job completa con warning si los modelos no están: `test_detallado_degrades_without_model` en verde — sin ONNX u onnxruntime, `density ≡ 1.0` y la salida es la determinista, con `UserWarning` (regla 5).
 
 ## Fase 2 — Alta fidelidad
 
