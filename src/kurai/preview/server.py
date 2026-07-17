@@ -18,6 +18,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from kurai.engine.decode import DecodeError
 from kurai.preview.protocol import (
     meta_message,
     pack_frame,
@@ -41,7 +42,13 @@ def create_app(input_file: Path) -> FastAPI:
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         await ws.accept()
-        session = PreviewSession(input_file)
+        try:
+            session = PreviewSession(input_file)
+        except DecodeError:
+            # El CLI valida antes de servir; esto cubre el archivo que se
+            # corrompió/borró con el server ya corriendo.
+            await ws.close(code=1011, reason="el input no es un video legible")
+            return
         await _send_meta(ws, session)
         with contextlib.suppress(WebSocketDisconnect):
             await _session_loop(ws, session)
@@ -88,8 +95,15 @@ class _FrameSource:
 
 
 async def _session_loop(ws: WebSocket, session: PreviewSession) -> None:
+    """Bombea frames con deadline ABSOLUTO (due = anterior + período, como
+    live.py) y recibe comandos con una task persistente que nunca se cancela
+    por timeout: sin carrera de wait_for (mensajes que se pierden al expirar
+    el timer) y sin starvation (un drag de slider no congela el playback)."""
     source = _FrameSource(session)
     frame_period = 1.0 / session.meta.fps
+    loop = asyncio.get_running_loop()
+    recv: asyncio.Task[str] | None = None
+    next_due: float | None = None
     try:
         # Primer frame inmediato, en pausa: el usuario ve algo al conectar
         cell = await source.next_frame()
@@ -98,14 +112,41 @@ async def _session_loop(ws: WebSocket, session: PreviewSession) -> None:
         await ws.send_text(state_message(session.frame_idx, session.playing))
 
         while True:
-            timeout = frame_period if session.playing else None
-            try:
-                raw = await asyncio.wait_for(ws.receive_text(), timeout=timeout)
-            except TimeoutError:
-                await _advance(ws, session, source)
+            if recv is None:
+                recv = asyncio.create_task(ws.receive_text())
+            if session.playing:
+                now = loop.time()
+                if next_due is None:
+                    next_due = now
+                timeout: float | None = max(0.0, next_due - now)
+            else:
+                next_due = None
+                timeout = None
+            done, _ = await asyncio.wait({recv}, timeout=timeout)
+
+            if recv in done:
+                raw = recv.result()  # WebSocketDisconnect propaga al endpoint
+                recv = None
+                try:
+                    await _handle_message(ws, session, source, raw)
+                except ValueError:
+                    # Payload malformado (input de red): se ignora y el cliente
+                    # sigue vivo; el state lo deja resincronizado.
+                    await ws.send_text(state_message(session.frame_idx, session.playing))
                 continue
-            await _handle_message(ws, session, source, raw)
+
+            # Venció el deadline: siguiente frame, y el próximo due se ancla al
+            # anterior (no a "ahora") para no acumular drift por compute/send.
+            await _advance(ws, session, source)
+            if next_due is not None:
+                next_due += frame_period
+                if next_due < loop.time():  # más lentos que el video: sin deuda
+                    next_due = loop.time()
     finally:
+        if recv is not None:
+            recv.cancel()
+            with contextlib.suppress(Exception):
+                await recv
         source.close()
 
 

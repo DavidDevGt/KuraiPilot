@@ -81,6 +81,32 @@ def test_cols_change_requires_redecode(clip_testsrc: Path) -> None:
     assert session.grid[1] == 120
 
 
+def test_seek_lands_on_exact_frame(clip_testsrc: Path) -> None:
+    """frames(k) arranca EXACTAMENTE en el frame k del stream completo.
+
+    Regresión del review: formatear start_s con precisión finita redondeaba
+    hacia arriba y -ss/accurate_seek descartaba el frame objetivo (off-by-one
+    en ~la mitad de los índices a 30 fps: 2/30 → \"0.066667\" > PTS exacto)."""
+    session = PreviewSession(clip_testsrc, PreviewConfig(cols=80))
+    all_frames = list(session.frames(0))
+    for target in (1, 2, 7):  # 2 y 7 redondean hacia arriba en µs a 30 fps
+        first = next(iter(session.frames(target)), None)
+        assert first is not None
+        assert np.array_equal(first, all_frames[target]), f"seek a {target} aterrizó mal"
+
+
+def test_gamma_change_after_cols_change_without_new_frame(clip_testsrc: Path) -> None:
+    """Tras un cambio de cols el cell-frame cacheado (grilla vieja) no puede
+    usarse para recomputar: si el re-decode aún no entregó frame, un cambio de
+    gamma devuelve None en vez de reventar por shapes incompatibles."""
+    session = PreviewSession(clip_testsrc, PreviewConfig(cols=80))
+    session.compute(next(iter(session.frames(0))))
+    session.update_config(cols=120)  # re-decode pendiente: no llegó frame nuevo
+    needs_redecode, recomputed = session.update_config(gamma=1.5)
+    assert not needs_redecode
+    assert recomputed is None  # sin frame de la grilla nueva no hay qué recomputar
+
+
 def test_config_clamping(clip_testsrc: Path) -> None:
     """cols y gamma fuera de rango se clampean, no explotan (input de red)."""
     session = PreviewSession(clip_testsrc, PreviewConfig(cols=80))
@@ -128,6 +154,22 @@ def test_client_message_validation() -> None:
         parse_client_message('{"type": "rm -rf"}')
     with pytest.raises(ValueError):
         parse_client_message('"no-un-dict"')
+
+
+def test_client_message_validates_payload_fields() -> None:
+    """Los CAMPOS también se validan (input de red): un valor no coercible
+    lanza ValueError acá y no revienta la sesión más adentro."""
+    msg = parse_client_message('{"type": "config", "cols": 100, "ramp": "blocks"}')
+    assert msg["cols"] == 100 and msg["ramp"] == "blocks"
+    for bad in (
+        '{"type": "config", "cols": "abc"}',
+        '{"type": "config", "gamma": "x"}',
+        '{"type": "config", "ramp": "inexistente"}',
+        '{"type": "seek", "frame": null}',
+        "sin json",
+    ):
+        with pytest.raises(ValueError):
+            parse_client_message(bad)
 
 
 # ------------------------------------------------------------ WebSocket e2e
@@ -183,3 +225,27 @@ def test_websocket_play_streams_frames(clip_testsrc: Path) -> None:
             idx, _cm = unpack_frame(ws.receive_bytes())
             indices.append(idx)
         assert indices == sorted(indices) and len(set(indices)) == 3
+
+
+def test_websocket_survives_garbage_messages(clip_testsrc: Path) -> None:
+    """Un payload malformado (input de red) NO mata la conexión: el server lo
+    ignora y responde con un state para resincronizar al cliente."""
+    client = TestClient(create_app(clip_testsrc))
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()  # meta
+        ws.receive_bytes()  # primer frame
+        ws.receive_json()  # state
+
+        for garbage in (
+            '{"type": "config", "cols": "abc"}',
+            "esto no es json",
+            '{"type": "seek", "frame": null}',
+        ):
+            ws.send_text(garbage)
+            state = ws.receive_json()
+            assert state["type"] == "state"
+
+        # Y después de la basura, la sesión sigue funcional
+        ws.send_json({"type": "seek", "frame": 5})
+        idx, _ = unpack_frame(ws.receive_bytes())
+        assert idx == 5

@@ -85,9 +85,15 @@ class PreviewSession:
         )
 
     def frames(self, start_idx: int = 0) -> Iterator[npt.NDArray[np.uint8]]:
-        """Cell-frames decodificados desde start_idx (seek por -ss)."""
+        """Cell-frames decodificados desde start_idx (seek por -ss).
+
+        El objetivo del seek es MEDIO frame antes del PTS exacto: -ss con
+        accurate_seek descarta todo frame con PTS menor al objetivo, y
+        start_idx/fps formateado con precisión finita puede redondear hacia
+        arriba y comerse justo el frame buscado (off-by-one en ~la mitad de
+        los índices a 30 fps). Medio período de margen lo hace robusto."""
         rows, cols = self.grid
-        start_s = start_idx / self.meta.fps
+        start_s = max(0.0, (start_idx - 0.5) / self.meta.fps)
         yield from iter_frames(self.input_file, self.meta, cols, rows, start_s=start_s)
 
     # ------------------------------------------------------------- comandos
@@ -109,8 +115,13 @@ class PreviewSession:
         self.config = new
         self._apply_config()  # resetea histéresis: config nueva, estado nuevo
 
-        if needs_redecode or self._last_cell_frame is None:
-            return needs_redecode, None
+        if needs_redecode:
+            # El cell-frame cacheado tiene la grilla vieja: recomputarlo contra
+            # offsets nuevos reventaría por shape. Solo sirve un frame fresco.
+            self._last_cell_frame = None
+            return True, None
+        if self._last_cell_frame is None:
+            return False, None
         return False, self.compute(self._last_cell_frame)
 
     def seek(self, frame_idx: int) -> int:

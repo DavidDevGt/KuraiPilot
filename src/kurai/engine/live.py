@@ -15,11 +15,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from kurai.config import ColorMode, JobConfig
+from kurai.config import JobConfig
 from kurai.engine.decode import iter_frames, probe_video
 from kurai.engine.dither import bayer_offsets
 from kurai.engine.grid import grid_shape
-from kurai.engine.pipeline import cells_to_charmatrix
+from kurai.engine.pipeline import cells_to_charmatrix, guard_phase
 from kurai.engine.stability import HysteresisState
 from kurai.render.ansi import ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, charmatrix_to_ansi
 from kurai.render.glyphs import ramp_chars
@@ -41,13 +41,18 @@ def terminal_grid(input_w: int, input_h: int, max_cols: int | None = None) -> tu
     grid_shape aplica igual; solo se recorta al tamaño de la ventana.
     """
     term = shutil.get_terminal_size()
-    cols_fit = max_cols or term.columns
-    cols = min(cols_fit, term.columns)
+    cols_fit = term.columns if max_cols is None else max_cols
+    cols = max(2, min(cols_fit, term.columns))
+    max_rows = max(1, term.lines - 1)  # dejar una línea para no forzar scroll
     rows, cols = grid_shape(input_w, input_h, cols)
-    if rows > term.lines - 1:  # dejar una línea para no forzar scroll
-        scale = (term.lines - 1) / rows
-        cols = max(20, int(cols * scale))
+    if rows > max_rows:
+        cols = max(2, int(cols * max_rows / rows))
         rows, cols = grid_shape(input_w, input_h, cols)
+        # grid_shape redondea: un video muy vertical puede seguir excediendo
+        # por una fila — ajuste fino hasta caber (setup, no hot path).
+        while rows > max_rows and cols > 2:
+            cols -= 1
+            rows, cols = grid_shape(input_w, input_h, cols)
     return rows, cols
 
 
@@ -65,6 +70,8 @@ def run_live(
     acá: el límite físico es la ventana). `out`/`clock`/`max_frames` existen
     para testear el pacing sin terminal real.
     """
+    guard_phase(cfg)  # mismo contrato que convert: fase futura ⇒ error claro, no silencio
+
     stream: TextSink = out if out is not None else sys.stdout
     write = stream.write
     flush = stream.flush
@@ -75,7 +82,7 @@ def run_live(
     levels = len(ramp)
     offsets = bayer_offsets(rows, cols, levels)
     state = HysteresisState(rows, cols)
-    color = cfg.preset.color if cfg.preset.color is not ColorMode.FG_BG else ColorMode.FG
+    color = cfg.preset.color
 
     frame_period = 1.0 / meta.fps
     shown = skipped = 0

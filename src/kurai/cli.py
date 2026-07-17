@@ -79,12 +79,17 @@ def convert(
     """Convierte un video a video ASCII."""
     import time
 
+    from pydantic import ValidationError
     from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
     from kurai.engine.decode import DecodeError, probe_video
     from kurai.engine.pipeline import run_job
 
-    cfg = JobConfig(preset=load_preset(preset), cols=cols, output=output, auto_scene=auto)
+    try:
+        cfg = JobConfig(preset=load_preset(preset), cols=cols, output=output, auto_scene=auto)
+    except ValidationError:
+        console.print("[red]✗[/] --cols debe estar entre 20 y 600.")
+        raise typer.Exit(code=1) from None
     try:
         meta = probe_video(input_file)
     except DecodeError as e:
@@ -133,13 +138,26 @@ def preview(
     open_browser: Annotated[bool, typer.Option("--open/--no-open")] = True,
 ) -> None:
     """Preview interactivo en el navegador (WebGL, solo localhost)."""
+    from kurai.engine.decode import DecodeError, probe_video
+
     try:
         from kurai.preview.server import serve
     except ImportError:
         console.print("[red]✗[/] El preview necesita sus dependencias: uv sync --extra preview")
         raise typer.Exit(code=1) from None
 
+    # Validar el input ANTES de levantar el server: un archivo que no es video
+    # falla acá con mensaje claro, no con un navegador colgado en "conectando".
+    try:
+        meta = probe_video(input_file)
+    except DecodeError as e:
+        console.print(f"[red]✗[/] {e}")
+        raise typer.Exit(code=1) from None
+
     url = f"http://127.0.0.1:{port}"
+    console.print(
+        f"({meta.width}x{meta.height} · {meta.fps:g} fps · {meta.duration_s:.1f}s)", style="dim"
+    )
     console.print(f"Preview de [bold]{input_file.name}[/] en {url} (Ctrl-C para salir)")
     if open_browser:
         import threading
@@ -153,13 +171,17 @@ def preview(
 def live(
     input_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
     preset: Annotated[str, typer.Option("--preset", "-p")] = "retro",
-    cols: Annotated[int | None, typer.Option("--cols", help="Default: ancho del terminal.")] = None,
+    cols: Annotated[
+        int | None, typer.Option("--cols", min=2, help="Ancho máximo; default: el del terminal.")
+    ] = None,
 ) -> None:
     """Reproduce en ASCII directo en la terminal (30 fps, sin audio)."""
     from kurai.engine.decode import DecodeError
     from kurai.engine.live import run_live
 
-    cfg = JobConfig(preset=load_preset(preset), cols=cols or 160)
+    # cols acá es el tope de ancho del TERMINAL (lo consume run_live/max_cols);
+    # el cols del JobConfig es el del export y no aplica en live.
+    cfg = JobConfig(preset=load_preset(preset))
     try:
         shown, skipped = run_live(input_file, cfg, max_cols=cols)
     except DecodeError as e:

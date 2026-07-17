@@ -38,3 +38,6 @@ training/*.pth
 .coverage
 coverage.xml
 htmlcov/
+
+# Videos de prueba y salidas locales
+output/

@@ -15,11 +15,13 @@ from __future__ import annotations
 import base64
 import json
 import struct
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
+from pydantic import BaseModel, ConfigDict, ValidationError
 
+from kurai.config import ColorMode, Ramp
 from kurai.types import CharMatrix
 
 _HEADER = struct.Struct("<IHHB")
@@ -74,9 +76,44 @@ def state_message(frame_idx: int, playing: bool) -> str:
     return json.dumps({"type": "state", "frame": frame_idx, "playing": playing})
 
 
+class _ConfigMsg(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    type: Literal["config"]
+    cols: int | None = None
+    ramp: Ramp | None = None
+    gamma: float | None = None
+    color: ColorMode | None = None
+
+
+class _SeekMsg(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    type: Literal["seek"]
+    frame: int = 0
+
+
+class _PlayPauseMsg(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    type: Literal["play", "pause"]
+
+
+_MESSAGES: dict[str, type[BaseModel]] = {
+    "config": _ConfigMsg,
+    "seek": _SeekMsg,
+    "play": _PlayPauseMsg,
+    "pause": _PlayPauseMsg,
+}
+
+
 def parse_client_message(raw: str) -> dict[str, Any]:
-    """Valida el JSON del cliente; tipos soportados: config, seek, play, pause."""
-    msg = json.loads(raw)
-    if not isinstance(msg, dict) or msg.get("type") not in {"config", "seek", "play", "pause"}:
+    """Valida el JSON del cliente CAMPO POR CAMPO (es input de red: un payload
+    malformado lanza ValueError acá, nunca revienta la sesión más adentro).
+    Tipos soportados: config, seek, play, pause."""
+    msg = json.loads(raw)  # JSONDecodeError es subclase de ValueError
+    if not isinstance(msg, dict) or msg.get("type") not in _MESSAGES:
         raise ValueError(f"Mensaje de cliente inválido: {raw[:100]}")
-    return msg
+    try:
+        model = _MESSAGES[msg["type"]].model_validate(msg)
+    except ValidationError as e:
+        raise ValueError(f"Mensaje de cliente inválido: {raw[:100]}") from e
+    # mode="json": los enums viajan como su valor (str) — lo que espera session
+    return model.model_dump(mode="json", exclude_none=True)

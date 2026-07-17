@@ -151,6 +151,7 @@ ws.onmessage = (ev) => {
     }
   } else {
     const dv = new DataView(ev.data);
+    $("seek").value = dv.getUint32(0, true); // el slider sigue al playback
     const rows = dv.getUint16(4, true);
     const cols = dv.getUint16(6, true);
     const n = rows * cols;
