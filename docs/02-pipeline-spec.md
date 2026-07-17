@@ -66,7 +66,7 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 
 - **Entrada**: `char_idx[t]`, `char_idx[t-1]`, `luma_grid[t]`, `luma_grid[t-1]`.
 - **Salida**: `char_idx[t]` estabilizado.
-- **Nivel base (determinista, siempre activo)** — histéresis por celda: una celda solo cambia de carácter si `|luma[t] - luma_committed|` supera `h = 0.6 × (ancho del nivel de cuantización)`. `luma_committed` es la luma del momento del último cambio, no la del frame anterior (evita drift acumulado). En cortes de escena (detectados en Etapa 1 por diferencia global) la histéresis se resetea completa.
+- **Nivel base (determinista, siempre activo)** — histéresis por celda: una celda solo cambia de carácter si `|luma[t] - luma_committed|` supera `h = 1.5 × (ancho del nivel de cuantización)`. `luma_committed` es la luma del momento del último cambio, no la del frame anterior (evita drift acumulado). En cortes de escena (detectados en Etapa 1 por diferencia global) la histéresis se resetea completa. (Ajustado de 0.6 a 1.5 tras medir FCR≈0.30-0.35 en metraje real con grano/textura — el valor original solo se había validado contra el fixture sintético estático del gate; ver `src/kurai/engine/stability.py`.)
 - **Nivel avanzado (IA, preset `alta-fidelidad`)** — optical flow (spec [04 §4](./04-ai-components.md)): el mapa de histéresis se desplaza siguiendo el flow, de modo que en paneos la "memoria" de cada celda sigue al contenido en vez de quedarse fija en coordenadas de pantalla. Sin esto, la histéresis base durante un paneo produce estelas.
 - La métrica que valida esta etapa (varianza de carácter en zonas estáticas) está definida en [06 §3](./06-testing-and-evaluation.md).
 

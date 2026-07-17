@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.typing as npt
+import pytest
 
+from kurai.engine import stability as stability_mod
 from kurai.engine.mapping import apply_gamma, quantize
-from kurai.engine.stability import HysteresisState
+from kurai.engine.stability import HYSTERESIS_FACTOR, HysteresisState
 
 
 def _run_sequence(
@@ -31,6 +33,33 @@ def test_fcr_zero_on_noisy_static(noisy_static_frames: list[npt.NDArray[np.float
     assert changes == 0
 
 
+def test_hysteresis_factor_absorbs_realistic_texture_noise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regresión: HYSTERESIS_FACTOR=0.6 pasaba el gate sintético (σ=0.01) pero
+    dejaba ~1/3 de la grilla titilando cuadro a cuadro en metraje real con
+    grano/textura (medido sobre película de 1968 y ruido de codec, docs/07
+    Fase 0.5) — el fixture de calibración era demasiado limpio para exponerlo.
+    Con σ=0.02 (el doble del ruido del fixture del gate, aún moderado)
+    HYSTERESIS_FACTOR=1.5 sigue en cero cambios; revertir a 0.6 no."""
+    rng = np.random.default_rng(7)
+    base = np.full((45, 160), 0.5, dtype=np.float32)
+    frames = [
+        np.clip(base + rng.normal(0.0, 0.02, base.shape), 0, 1).astype(np.float32)
+        for _ in range(20)
+    ]
+
+    def changes_at(factor: float) -> int:
+        monkeypatch.setattr(stability_mod, "HYSTERESIS_FACTOR", factor)
+        results = _run_sequence(frames)
+        return sum(
+            int(np.count_nonzero(results[i] != results[i - 1])) for i in range(1, len(results))
+        )
+
+    assert changes_at(HYSTERESIS_FACTOR) == 0
+    assert changes_at(0.6) > 0, "el umbral viejo debería mostrar la regresión que motivó el ajuste"
+
+
 def test_real_change_is_adopted() -> None:
     """La histéresis frena ruido, no contenido: un cambio real pasa."""
     dark = np.full((4, 4), 0.1, dtype=np.float32)
@@ -46,7 +75,7 @@ def test_no_drift_accumulation() -> None:
     rampa lenta bajo h por paso no arrastra el carácter (anti-drift)."""
     state = HysteresisState(1, 1)
     levels = 10
-    h = 0.6 / levels
+    h = HYSTERESIS_FACTOR / levels
     start = 0.55  # centro del nivel 5: el cruce de nivel coincide con superar h
     luma = np.array([[start]], dtype=np.float32)
     first = state.apply(luma, quantize(luma, levels), levels).copy()

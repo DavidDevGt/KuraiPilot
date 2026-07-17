@@ -19,6 +19,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). Versionado: S
 - Fronteras de arquitectura ejecutables con import-linter.
 - Infraestructura multi-equipo: CONTRIBUTING, CODEOWNERS, plantillas de PR/issues.
 
+### Changed
+
+- **Umbral de histéresis (E7) de 0.6 a 1.5** (`kurai/engine/stability.py`): medido sobre metraje real con grano/textura (película de 1968, ruido de codec), el umbral viejo dejaba ~30-35% de la grilla cambiando de carácter cada frame — perceptible como parpadeo/distorsión incómoda en escenas alejadas o con mucho detalle, pese a que el gate sintético (docs/06 §3) daba FCR=0. El fixture del gate era demasiado limpio para exponerlo. El nuevo valor corta ese ruido a la mitad (~0.16 FCR) sin costo medible en contenido limpio con movimiento real de cámara (Sintel: FCR 0.025→0.016). No toca `cols` ni ningún otro default de preset — mejora de calidad "gratis" en el mismo ancho de grilla.
+
 ### Fixed
 
 - `kurai --version` no funcionaba sin subcomando.
