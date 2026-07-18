@@ -14,7 +14,17 @@ from __future__ import annotations
 import numpy as np
 import numpy.typing as npt
 
-HYSTERESIS_FACTOR = 0.6  # h = 0.6 × ancho del nivel de cuantización (docs/02 E7)
+# h = 1.5 × ancho del nivel de cuantización (docs/02 E7). El gate de FCR
+# (docs/06 §3) solo mide ruido sintético/codec sobre fondo ESTÁTICO, donde
+# 0.6 ya daba FCR=0 — pero contenido real con textura/grano (grano de
+# película, follaje, agua) mostraba FCR≈0.30-0.35 medido cuadro a cuadro
+# sobre metraje real (docs/07 Fase 0.5, hallazgo post-gate): un tercio de la
+# grilla titilando cada frame, perceptible como ruido/parpadeo incómodo.
+# 1.5 corta ese ruido a la mitad (~0.16) sin costo medible en contenido
+# limpio con movimiento real (paneo de cámara en Sintel: FCR 0.025→0.016,
+# prácticamente invariante) — el umbral era conservador solo por accidente
+# de que el fixture de calibración era sintético y limpio.
+HYSTERESIS_FACTOR = 1.5
 
 # Umbral de corte de escena sobre diferencia media de luma post-gamma entre
 # frames consecutivos; PySceneDetect lo reemplaza en Fase 1 (docs/03 §1)

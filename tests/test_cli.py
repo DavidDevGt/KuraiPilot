@@ -47,14 +47,15 @@ def test_convert_unknown_preset_fails_listing_available(tmp_path: Path) -> None:
     assert "retro" in str(result.exception)  # el error lista los disponibles
 
 
-def test_pending_commands_exit_2_not_crash(tmp_path: Path) -> None:
-    """Los subcomandos de fases pendientes salen con código 2, nunca traceback.
-    (convert y bench ya no están acá: se implementaron en Fase 0.)"""
+def test_live_garbage_input_is_clean_error(tmp_path: Path) -> None:
+    """live con un input que no es video: error accionable, exit 1, terminal
+    intacto (no llega a entrar al alt screen). Desde Fase 0.5 no quedan
+    subcomandos pendientes: convert/bench/preview/live están implementados."""
     f = tmp_path / "x.mp4"
     f.write_bytes(b"\x00")
-    for args in (["preview", str(f)], ["live"]):
-        result = runner.invoke(app, args)
-        assert result.exit_code == 2, f"{args}: {result.output}"
+    result = runner.invoke(app, ["live", str(f)])
+    assert result.exit_code == 1
+    assert "\x1b[?1049h" not in result.output  # jamás entró al alt buffer
 
 
 @pytest.mark.ffmpeg

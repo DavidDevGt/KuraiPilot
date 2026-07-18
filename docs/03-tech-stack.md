@@ -34,10 +34,15 @@ Modelos del inventario de Ollama local que **no** se usan y por qué: los LLM de
 |---|---|
 | Server local | FastAPI + Uvicorn, bind solo a `127.0.0.1` |
 | Transporte | WebSocket: la CharMatrix (no píxeles) viaja al cliente — 160×90×5 bytes ≈ 72 KB/frame sin comprimir, trivial en localhost |
-| Render cliente | WebGL2, atlas de glifos como textura, un quad instanciado por celda (patrón sprite-sheet de [INVESTIGATION.md §3](../INVESTIGATION.md)) |
-| Build frontend | Vite + TypeScript vanilla (sin framework; la UI es un canvas y ocho sliders) |
+| Render cliente | WebGL2, **un solo pass**: fullscreen quad + 3 texturas (char_idx R8UI, fg RGB, atlas de glifos R8) con `texelFetch` por celda |
+| Build frontend | **Sin build**: ES modules vanilla servidos como estáticos (`preview/static/`) |
 
 Enviar la CharMatrix en vez de video renderizado mantiene el principio de artefacto canónico: el cliente WebGL y el Renderer de export son dos proyecciones del mismo dato.
+
+Dos decisiones tomadas al implementar la Fase 0.5 (supersede lo que esta tabla decía antes):
+
+- **Fullscreen-quad en vez de quad-por-celda instanciado**: para una grilla ≤200×~112 celdas, un fragment shader con `texelFetch` sobre texturas de datos es más simple (cero geometría, cero buffers) e igual de rápido; el instancing se justificaría con grillas de órdenes de magnitud mayores.
+- **Sin Vite/TypeScript por ahora**: el frontend es un archivo de ~200 líneas; un toolchain de node agregaría un paso de build al repo y a CI sin retorno. Se re-evalúa cuando el HTML export embebible (Fase 3) lo haga crecer.
 
 ## 4. Testing y calidad
 

@@ -120,6 +120,7 @@ def iter_frames(
     work_width: int,
     work_height: int,
     hwaccel: bool = False,
+    start_s: float = 0.0,
 ) -> Iterator[npt.NDArray[np.uint8]]:
     """Frames RGB (work_height, work_width, 3) a resolución de trabajo, CFR.
 
@@ -127,9 +128,14 @@ def iter_frames(
     (pipe rawvideo), ffmpeg baja el frame a sistema tras decodificar — el scale
     corre en software sobre el frame ya decodificado. scale_cuda entra recién
     cuando el consumidor sea GPU-residente (Fase 0 tardía, docs/02 E1).
+
+    start_s hace seek por keyframe ANTES del demux (-ss como opción de input:
+    rápido, y exacto tras la normalización CFR). Lo usa el preview (Fase 0.5).
     """
     frame_bytes = work_width * work_height * 3
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
+    if start_s > 0:
+        cmd += ["-ss", f"{start_s:.6f}"]
     if hwaccel:
         cmd += ["-hwaccel", "cuda"]
     # accurate_rnd+full_chroma_int: sin ellos swscale usa el camino rápido con

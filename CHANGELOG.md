@@ -6,6 +6,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). Versionado: S
 
 ### Added
 
+- **Fase 0.5 completa** (gate en verde, docs/07): `kurai preview` — server FastAPI+WebSocket en localhost que streamea la CharMatrix (no píxeles) a un cliente WebGL2 de un solo pass, con sliders de columnas/rampa/gamma/color, play/pause/seek; ajustes de rampa/gamma/color reflejan en <100 ms y la CharMatrix del preview es bit a bit la del export (mismo código, test de igualdad). `kurai live` — reproducción ANSI en terminal con run-length de color 24-bit, pacing a fps con drop de frames y restore de terminal garantizado. `iter_frames` gana seek (`start_s`).
+
 - **Fase 0 completa** (gate en verde, docs/07): `kurai convert` produce video ASCII real con preset `retro` — decode/demux (E1), grilla con corrección de aspecto 1:2 (E2), rampa calibrada por cobertura de tinta con glifos bitmap 8×16 embebidos, mapeo+Bayer fusionados (E4/E6), anti-flicker por histéresis con FCR=0 medido (E7), render por atlas (E8), encode NVENC con audio bit-idéntico (E9). 12.9× tiempo real en la máquina de referencia (fast path E1+E2 fusionadas vía scale=area).
 - `kurai bench` con modos passthrough y retro, baselines versionados y `--check` de regresión.
 
@@ -16,6 +18,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). Versionado: S
 - CI en GitHub Actions (CPU-only) y suite por módulo con Hypothesis y fixtures lavfi.
 - Fronteras de arquitectura ejecutables con import-linter.
 - Infraestructura multi-equipo: CONTRIBUTING, CODEOWNERS, plantillas de PR/issues.
+
+### Changed
+
+- **Umbral de histéresis (E7) de 0.6 a 1.5** (`kurai/engine/stability.py`): medido sobre metraje real con grano/textura (película de 1968, ruido de codec), el umbral viejo dejaba ~30-35% de la grilla cambiando de carácter cada frame — perceptible como parpadeo/distorsión incómoda en escenas alejadas o con mucho detalle, pese a que el gate sintético (docs/06 §3) daba FCR=0. El fixture del gate era demasiado limpio para exponerlo. El nuevo valor corta ese ruido a la mitad (~0.16 FCR) sin costo medible en contenido limpio con movimiento real de cámara (Sintel: FCR 0.025→0.016). No toca `cols` ni ningún otro default de preset — mejora de calidad "gratis" en el mismo ancho de grilla.
 
 ### Fixed
 

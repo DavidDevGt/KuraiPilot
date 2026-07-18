@@ -32,7 +32,7 @@ MAX_QUEUE_FRAMES = 64  # docs/02 §11 — hoy el streaming es sincrónico; aplic
 ProgressFn = Callable[[int, int], None]  # (frames_done, total)
 
 
-def _guard_phase(cfg: JobConfig) -> None:
+def guard_phase(cfg: JobConfig) -> None:
     """Componentes de fases futuras fallan ANTES de decodificar nada."""
     if cfg.preset.saliency:
         raise NotImplementedError("Fase 1")
@@ -72,7 +72,7 @@ def run_job(
     on_progress: ProgressFn | None = None,
 ) -> Path:
     """Ejecuta el job completo y devuelve el path del output."""
-    _guard_phase(cfg)
+    guard_phase(cfg)
 
     meta = probe_video(input_file)
     rows, cols = grid_shape(meta.width, meta.height, cfg.cols)
@@ -126,7 +126,7 @@ def frames_to_charmatrices(
 ) -> list[CharMatrix]:
     """Etapas 2-7 puras sobre frames en memoria: la vía de los golden files
     (docs/06 §1) — sin códecs de por medio, reproducible entre versiones de ffmpeg."""
-    _guard_phase(cfg)
+    guard_phase(cfg)
     ramp = ramp_chars(cfg.preset.ramp)
     levels = len(ramp)
     offsets = bayer_offsets(rows, cols, levels)

@@ -34,7 +34,7 @@ jobs:
         with:
           enable-cache: true
       - name: Sync (frozen lockfile)
-        run: uv sync --frozen
+        run: uv sync --frozen --extra preview
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format check
@@ -61,7 +61,7 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python }}
       - name: Sync (frozen lockfile)
-        run: uv sync --frozen
+        run: uv sync --frozen --extra preview
       - name: Run suite con coverage (umbral en pyproject)
         run: uv run pytest --cov --cov-report=term-missing:skip-covered
       - name: Goldens regenerables (make_goldens produce lo mismo que está commiteado)
