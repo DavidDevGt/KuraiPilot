@@ -127,12 +127,15 @@ def test_convert_silent_clip(clip_silent: Path, tmp_path: Path) -> None:
 
 
 def test_future_phase_presets_fail_fast(tmp_path: Path) -> None:
-    """Presets con componentes de fases futuras fallan ANTES de decodificar."""
-    fake = tmp_path / "x.mp4"  # no llega a abrirse
+    """Fase 1 (detallado) ya está soportada; Fase 2 (alta-fidelidad) sigue
+    fallando ANTES de decodificar nada."""
+    from kurai.engine.pipeline import guard_phase
+
+    guard_phase(JobConfig(preset=load_preset("detallado")))  # no levanta: E3/E5 están
+
+    fake = tmp_path / "x.mp4"  # no llega a abrirse: guard_phase falla antes
     fake.write_bytes(b"\x00")
-    with pytest.raises(NotImplementedError, match="Fase 1"):
-        run_job(fake, JobConfig(preset=load_preset("detallado")))
-    with pytest.raises(NotImplementedError, match="Fase (1|2)"):
+    with pytest.raises(NotImplementedError, match="Fase 2"):
         run_job(fake, JobConfig(preset=load_preset("alta-fidelidad")))
 
 
@@ -142,3 +145,65 @@ def test_charmatrix_channels_within_ramp(circle_frame: npt.NDArray[np.uint8]) ->
     cm = frames_to_charmatrices([_work_gradient(rows, cols)], rows, cols, _retro_cfg())[0]
     assert isinstance(cm, CharMatrix)
     assert int(cm.char_idx.max()) <= 9  # rampa short: 10 niveles
+
+
+# ------------------------------------------------------------------ Fase 1: saliencia
+
+
+def test_density_uniform_is_noop() -> None:
+    """density ≡ 1.0 produce EXACTAMENTE el char_idx de sin saliencia — la
+    garantía que mantiene los golden de retro intactos y hace de detallado-sin-
+    modelo una degradación bit a bit al determinista."""
+    from kurai.engine.mapping import quantize
+
+    rng = np.random.default_rng(3)
+    lg = rng.random((30, 50), dtype=np.float32)
+    offsets = (rng.random((30, 50), dtype=np.float32) - 0.5) / 10.0
+    ones = np.ones((30, 50), dtype=np.float32)
+    base = quantize(lg, 10, offsets, None)
+    with_density = quantize(lg, 10, offsets, ones)
+    assert np.array_equal(base, with_density)
+
+
+def test_density_concentrates_detail() -> None:
+    """El presupuesto de detalle se concentra donde la densidad es alta: sobre
+    el MISMO gradiente, una celda de baja saliencia usa menos caracteres
+    distintos que una de alta (docs/02 E3)."""
+    from kurai.engine.mapping import quantize
+
+    ramp_gradient = np.tile(np.linspace(0, 1, 40, dtype=np.float32), (10, 1))
+    high = quantize(ramp_gradient, 10, None, np.ones((10, 40), dtype=np.float32))
+    low = quantize(ramp_gradient, 10, None, np.full((10, 40), 0.0, dtype=np.float32))
+    assert len(np.unique(low)) < len(np.unique(high))
+    assert len(np.unique(high)) == 10  # saliencia plena = rampa completa
+
+
+@pytest.mark.ffmpeg
+def test_detallado_degrades_without_model(
+    clip_testsrc: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gate de Fase 1 (docs/07): sin modelo, el job COMPLETA con warning y su
+    salida es la del pipeline determinista (density uniforme)."""
+    monkeypatch.setenv("KURAI_MODELS_DIR", str(tmp_path / "no-models"))  # load → None
+    out = tmp_path / "det.mp4"
+    cfg = JobConfig(preset=load_preset("detallado"), cols=80, output=out)
+    with pytest.warns(UserWarning, match="saliencia"):
+        result = run_job(clip_testsrc, cfg)
+    assert result == out and out.exists()
+
+
+@pytest.mark.ffmpeg
+def test_detallado_with_model_uses_directional_glyphs(clip_testsrc: Path, tmp_path: Path) -> None:
+    """Con modelo real, detallado corre E3+E5 y produce char_idx direccionales
+    (índice ≥ niveles tonales) en los bordes. Se salta si falta onnxruntime o
+    el modelo (CI corre sin ambos → degradación, cubierta por el test de arriba)."""
+    pytest.importorskip("onnxruntime", reason="saliencia real requiere onnxruntime")
+    from kurai.engine.pipeline import saliency_model_path
+
+    if not saliency_model_path().is_file():
+        pytest.skip("modelo u2net_lite.onnx no presente (uv run python tools/fetch_models.py)")
+
+    out = tmp_path / "det_real.mp4"
+    cfg = JobConfig(preset=load_preset("detallado"), cols=80, output=out)
+    run_job(clip_testsrc, cfg)
+    assert out.exists()

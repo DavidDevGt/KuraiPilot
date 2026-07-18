@@ -70,6 +70,9 @@ def bitmap(char: str) -> npt.NDArray[np.uint8]:
         return (np.unpackbits(bits[:, None], axis=1) * 255).astype(np.uint8)
     if char in _BLOCK_FILL:
         return _block_bitmap(_BLOCK_FILL[char])
+    directional = DIRECTIONAL_GLYPHS.get(char)
+    if directional is not None:  # E5 `edges`: trazos direccionales (definidos abajo)
+        return directional.copy()
     raise KeyError(f"Glifo '{char}' no está en la fuente embebida")
 
 
@@ -83,3 +86,97 @@ def ramp_chars(ramp: Ramp) -> str:
     if chars is None:
         raise NotImplementedError("Fase 2")  # Ramp.LONG, docs/07
     return chars
+
+
+# ── Glifos direccionales (E5 nivel `edges`, docs/02 E5) ──────────────────────
+# La rampa tonal `short` no incluye trazos direccionales; el refinamiento
+# estructural de la Etapa 5 los necesita para reemplazar el carácter tonal por
+# uno que siga la orientación del borde (estilo AsciiArtist). Se generan de
+# forma procedural y determinista (mismo dtype (uint8), mismo layout (GLYPH_H,
+# GLYPH_W) y misma escala de tinta {0, 255} que los tonales) para no depender de
+# una fuente del sistema — mismo contrato de reproducibilidad G4. NO forman
+# parte de RAMPS ni del hash-guard tonal: son un set aparte, indexado en el
+# atlas a continuación de la rampa tonal (índice = tonal_levels + posición).
+_DIRECTIONAL_ORDER = "/\\|-_()"
+
+
+def _dir_canvas() -> npt.NDArray[np.uint8]:
+    return np.zeros((GLYPH_H, GLYPH_W), dtype=np.uint8)
+
+
+def _draw_diagonal(canvas: npt.NDArray[np.uint8], *, rising: bool) -> None:
+    """Diagonal de 2 px. rising=True → '/' (abajo-izquierda a arriba-derecha)."""
+    rows = np.arange(GLYPH_H)
+    frac = rows / (GLYPH_H - 1)  # 0.0 arriba → 1.0 abajo
+    span = np.float64(GLYPH_W - 1)
+    cols = np.rint((1.0 - frac) * span if rising else frac * span).astype(np.intp)
+    canvas[rows, cols] = 255
+    canvas[rows, np.clip(cols - 1, 0, GLYPH_W - 1)] = 255
+
+
+def _draw_vertical(canvas: npt.NDArray[np.uint8]) -> None:
+    """'|' — barra vertical de 2 px centrada."""
+    mid = GLYPH_W // 2
+    canvas[:, mid - 1 : mid + 1] = 255
+
+
+def _draw_horizontal(canvas: npt.NDArray[np.uint8], top_row: int) -> None:
+    """'-' / '_' — barra horizontal de 2 px a la altura `top_row`."""
+    canvas[top_row : top_row + 2, 1 : GLYPH_W - 1] = 255
+
+
+def _draw_arc(canvas: npt.NDArray[np.uint8], *, bulge_left: bool) -> None:
+    """'(' (panza a la izquierda) / ')' (panza a la derecha) — arco vertical."""
+    rows = np.arange(GLYPH_H)
+    bulge = np.sin(np.pi * rows / (GLYPH_H - 1))  # 0 en extremos, 1 al medio
+    cols = np.rint(4.0 - 3.0 * bulge if bulge_left else 3.0 + 3.0 * bulge)
+    cols = np.clip(cols.astype(np.intp), 0, GLYPH_W - 1)
+    canvas[rows, cols] = 255
+
+
+def _build_directional() -> dict[str, npt.NDArray[np.uint8]]:
+    glyphs: dict[str, npt.NDArray[np.uint8]] = {}
+
+    slash = _dir_canvas()
+    _draw_diagonal(slash, rising=True)
+    glyphs["/"] = slash
+
+    backslash = _dir_canvas()
+    _draw_diagonal(backslash, rising=False)
+    glyphs["\\"] = backslash
+
+    pipe = _dir_canvas()
+    _draw_vertical(pipe)
+    glyphs["|"] = pipe
+
+    dash = _dir_canvas()
+    _draw_horizontal(dash, GLYPH_H // 2 - 1)
+    glyphs["-"] = dash
+
+    underscore = _dir_canvas()
+    _draw_horizontal(underscore, GLYPH_H - 2)
+    glyphs["_"] = underscore
+
+    lparen = _dir_canvas()
+    _draw_arc(lparen, bulge_left=True)
+    glyphs["("] = lparen
+
+    rparen = _dir_canvas()
+    _draw_arc(rparen, bulge_left=False)
+    glyphs[")"] = rparen
+
+    return glyphs
+
+
+# char → bitmap (GLYPH_H, GLYPH_W) uint8 {0, 255}, en el orden canónico.
+DIRECTIONAL_GLYPHS: dict[str, npt.NDArray[np.uint8]] = _build_directional()
+
+
+def directional_glyph_string() -> str:
+    """Orden canónico de los glifos direccionales de E5 `edges` (docs/02 E5).
+
+    El índice de cada direccional en el atlas es `tonal_levels + posición` en
+    esta cadena. Determinista y estable — mismo contrato de reproducibilidad G4
+    que las rampas tonales.
+    """
+    return _DIRECTIONAL_ORDER

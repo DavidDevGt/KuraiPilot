@@ -11,11 +11,12 @@ from __future__ import annotations
 import shutil
 import sys
 import time
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from kurai.config import JobConfig
+from kurai.config import JobConfig, RefineMode
 from kurai.engine.decode import iter_frames, probe_video
 from kurai.engine.dither import bayer_offsets
 from kurai.engine.grid import grid_shape
@@ -71,6 +72,17 @@ def run_live(
     para testear el pacing sin terminal real.
     """
     guard_phase(cfg)  # mismo contrato que convert: fase futura ⇒ error claro, no silencio
+
+    # El live es el subconjunto determinista tonal: saliencia (E3) y edges (E5)
+    # son del export/preview. Degradar en silencio sería divergencia oculta
+    # (regla 5) — se avisa ANTES de entrar al alt-screen, no se ignora.
+    if cfg.preset.saliency or cfg.preset.refine is not RefineMode.OFF:
+        warnings.warn(
+            "live reproduce el subconjunto determinista tonal: saliencia y edges "
+            "no se aplican acá (usá `kurai convert` o `kurai preview`).",
+            UserWarning,
+            stacklevel=2,
+        )
 
     stream: TextSink = out if out is not None else sys.stdout
     write = stream.write
