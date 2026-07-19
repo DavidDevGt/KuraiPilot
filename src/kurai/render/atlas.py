@@ -47,4 +47,13 @@ def compose(
         frame = mask[:, :, None].astype(np.uint16) * tint.astype(np.uint16) // 255
         return frame.astype(np.uint8)
 
-    raise NotImplementedError("Fase 2")  # fg+bg: dos colores por celda
+    # fg+bg (docs/02 E8): la tinta del glifo lleva fg y el resto de la celda bg
+    # — dos colores por celda. Mismo gather que fg más el término de fondo.
+    if cm.bg is None:
+        raise ValueError("ColorMode.FG_BG requiere CharMatrix.bg (pipeline fg+bg)")
+    mask = atlas[cm.char_idx].transpose(0, 2, 1, 3).reshape(rows * GLYPH_H, cols * GLYPH_W)
+    fg_tint = np.repeat(np.repeat(cm.fg, GLYPH_H, axis=0), GLYPH_W, axis=1).astype(np.uint16)
+    bg_tint = np.repeat(np.repeat(cm.bg, GLYPH_H, axis=0), GLYPH_W, axis=1).astype(np.uint16)
+    m = mask[:, :, None].astype(np.uint16)
+    frame = (m * fg_tint + (255 - m) * bg_tint) // 255
+    return frame.astype(np.uint8)

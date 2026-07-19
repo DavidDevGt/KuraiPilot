@@ -37,6 +37,8 @@ Fases con criterios de aceptación verificables. Cada fase termina con un gate e
 
 **Alcance**: CNN de glifos (entrenamiento + export ONNX, `training/`), FS dithering, Farneback flow para histéresis warpeada, color `fg+bg`. Preset `alta-fidelidad` completo.
 
+**Progreso**: los dos componentes deterministas ya están — FS dithering (E6, serpentine, 3 ms/frame en grilla 160×90) y color `fg+bg` (E8, decode a `rows*2`, contrato en docs/02 E8) — expuestos en el preset `nitido` (máximo detalle sin IA, saliencia off tras el NO-GO del A/B de Fase 1), a 1.8× tiempo real en la máquina de referencia. Restan CNN de glifos y Farneback flow, que son los que cierran `alta-fidelidad` y los gates de esta fase.
+
 **Gate**:
 - [ ] CNN: mejora perceptible en subset textura **y** ≤ 3 ms/frame p95, o se elimina ([04 §3](./04-ai-components.md) — la eliminación es un resultado aceptable de la fase, no un fracaso).
 - [ ] Flow: FCR en fixture de paneo mejora ≥ 50% sobre histéresis sola, o el flow no entra.

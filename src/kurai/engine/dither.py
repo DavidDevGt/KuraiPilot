@@ -39,5 +39,44 @@ def bayer_offsets(rows: int, cols: int, levels: int) -> npt.NDArray[np.float32]:
 
 def floyd_steinberg(luma_grid: npt.NDArray[np.float32], levels: int) -> npt.NDArray[np.float32]:
     """Luma con error difundido (serpentine). Única excepción a la regla de
-    vectorización (ADR-006): secuencial por naturaleza; Numba si el puro es lento."""
-    raise NotImplementedError("Fase 2")
+    vectorización (ADR-006): secuencial por naturaleza; Numba si el puro es lento.
+
+    Devuelve el CENTRO del bin elegido por celda ((k+0.5)/levels), no la luma
+    ajustada cruda: así el floor de quantize() reproduce exactamente el nivel
+    que el FS eligió, sin riesgo de cruzar un borde de bin al redondear el
+    double interno a float32. El loop corre sobre floats de Python (IEEE-754
+    double): determinista bit a bit en cualquier máquina.
+    """
+    rows, cols = int(luma_grid.shape[0]), int(luma_grid.shape[1])
+    inv = 1.0 / levels
+    top = levels - 1
+    grid: list[list[float]] = luma_grid.astype(np.float64).tolist()
+    out: list[list[float]] = [[0.0] * cols for _ in range(rows)]
+    for r in range(rows):
+        row = grid[r]
+        below = grid[r + 1] if r + 1 < rows else None
+        step = 1 if r % 2 == 0 else -1
+        rng = range(cols) if step == 1 else range(cols - 1, -1, -1)
+        for c in rng:
+            old = row[c]
+            k = int(old * levels)
+            if old * levels < k:  # int() trunca hacia 0; corregir a floor
+                k -= 1
+            if k < 0:
+                k = 0
+            elif k > top:
+                k = top
+            center = (k + 0.5) * inv
+            out[r][c] = center
+            err = old - center
+            ahead = c + step
+            behind = c - step
+            if 0 <= ahead < cols:
+                row[ahead] += err * 0.4375  # 7/16
+            if below is not None:
+                if 0 <= behind < cols:
+                    below[behind] += err * 0.1875  # 3/16
+                below[c] += err * 0.3125  # 5/16
+                if 0 <= ahead < cols:
+                    below[ahead] += err * 0.0625  # 1/16
+    return np.asarray(out, dtype=np.float32)

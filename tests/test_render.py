@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from kurai.config import ColorMode, Ramp
 from kurai.render.atlas import MONO_COLOR, build_atlas, compose
@@ -88,3 +89,44 @@ def test_fg_tints_with_cell_color() -> None:
     assert frame[:, :, 0].max() == 255  # canal rojo encendido
     assert frame[:, :, 1].max() == 0  # verde/azul apagados
     assert frame[:, :, 2].max() == 0
+
+
+# ------------------------------------------------------------------ fg+bg (Fase 2, E8)
+
+
+def test_fgbg_ink_gets_fg_and_rest_gets_bg() -> None:
+    """El mask del atlas es binario {0,255} ⇒ la mezcla es exactamente
+    where(tinta, fg, bg) — dos colores por celda, sin valores intermedios."""
+    chars = ramp_chars(Ramp.SHORT)
+    atlas = build_atlas(chars)
+    fg = np.zeros((1, 1, 3), dtype=np.uint8)
+    fg[0, 0] = (255, 0, 0)
+    bg = np.zeros((1, 1, 3), dtype=np.uint8)
+    bg[0, 0] = (0, 0, 255)
+    cm = CharMatrix(char_idx=np.full((1, 1), 9, dtype=np.uint8), fg=fg, bg=bg)
+    frame = compose(cm, atlas, ColorMode.FG_BG)
+    mask = atlas[9] == 255
+    assert np.array_equal(frame[mask], np.tile([255, 0, 0], (mask.sum(), 1)))
+    assert np.array_equal(frame[~mask], np.tile([0, 0, 255], ((~mask).sum(), 1)))
+
+
+def test_fgbg_space_glyph_is_pure_bg() -> None:
+    """Espacio (cobertura 0): la celda entera es bg — el fondo por fin existe."""
+    atlas = build_atlas(ramp_chars(Ramp.SHORT))
+    bg = np.full((2, 3, 3), 77, dtype=np.uint8)
+    cm = CharMatrix(
+        char_idx=np.zeros((2, 3), dtype=np.uint8),
+        fg=np.full((2, 3, 3), 200, dtype=np.uint8),
+        bg=bg,
+    )
+    frame = compose(cm, atlas, ColorMode.FG_BG)
+    assert np.array_equal(frame, np.full_like(frame, 77))
+
+
+def test_fgbg_requires_bg() -> None:
+    atlas = build_atlas(ramp_chars(Ramp.SHORT))
+    cm = CharMatrix(
+        char_idx=np.zeros((1, 1), dtype=np.uint8), fg=np.zeros((1, 1, 3), dtype=np.uint8)
+    )
+    with pytest.raises(ValueError, match="bg"):
+        compose(cm, atlas, ColorMode.FG_BG)

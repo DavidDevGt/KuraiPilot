@@ -119,7 +119,7 @@ def convert(
     except NotImplementedError as e:
         console.print(
             f"[yellow]El preset '{cfg.preset.name}' necesita componentes de {e} "
-            f"(docs/07-roadmap.md). Hoy: --preset retro.[/]"
+            f"(docs/07-roadmap.md). Hoy: retro, detallado o nitido.[/]"
         )
         raise typer.Exit(code=2) from None
     except DecodeError as e:
@@ -188,7 +188,9 @@ def live(
         console.print(f"[red]✗[/] {e}")
         raise typer.Exit(code=1) from None
     except NotImplementedError as e:
-        console.print(f"[yellow]El preset necesita componentes de {e}. Hoy: retro.[/]")
+        console.print(
+            f"[yellow]El preset necesita componentes de {e}. Hoy: retro, detallado o nitido.[/]"
+        )
         raise typer.Exit(code=2) from None
     except KeyboardInterrupt:
         console.print("Interrumpido.")

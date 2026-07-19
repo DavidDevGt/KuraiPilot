@@ -114,3 +114,25 @@ def test_terminal_grid_fits_window(monkeypatch: pytest.MonkeyPatch) -> None:
     rows, cols = live_mod.terminal_grid(1920, 1080, None)
     assert cols <= 100
     assert rows <= 29  # deja una línea libre
+
+
+@pytest.mark.ffmpeg
+def test_live_nitido_degrades_to_fg_with_warning(
+    clip_testsrc: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """fg+bg y FS no aplican en live (subconjunto tonal): completa igual,
+    degradando a fg, y avisa ANTES del alt-screen (regla 5)."""
+    from kurai.engine import live as live_mod
+
+    monkeypatch.setattr(
+        live_mod.shutil, "get_terminal_size", lambda: __import__("os").terminal_size((80, 24))
+    )
+    buf = io.StringIO()
+    with pytest.warns(UserWarning, match="subconjunto determinista tonal"):
+        shown, skipped = live_mod.run_live(
+            clip_testsrc, JobConfig(preset=load_preset("nitido")), out=buf, max_frames=3
+        )
+    output = buf.getvalue()
+    assert output.endswith(EXIT_ALT_SCREEN)
+    assert shown + skipped == 3
+    assert "\x1b[38;2;" in output  # colores fg 24-bit: degradó a fg, no a mono

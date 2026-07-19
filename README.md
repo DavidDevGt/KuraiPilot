@@ -126,7 +126,8 @@ kurai doctor                                      # diagnóstico del entorno
 | Preset | Saliencia | Refinamiento | Dither | Color | Estado |
 |---|---|---|---|---|---|
 | `retro` (default) | — | — | Bayer | mono | ✅ Fase 0 |
-| `detallado` | U2Net-lite | edges | Bayer | fg | 🔜 Fase 1 |
+| `detallado` | U2Net-lite | edges | Bayer | fg | ✅ Fase 1 |
+| `nitido` | — | edges | Floyd-Steinberg | fg+bg | ✅ Fase 2 parcial |
 | `alta-fidelidad` | U2Net-lite | edges+CNN | Floyd-Steinberg | fg+bg | 🔜 Fase 2 |
 
 Pedir un preset con componentes de una fase futura falla con un mensaje claro (`El preset necesita componentes de Fase N`), nunca con un traceback.

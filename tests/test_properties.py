@@ -11,7 +11,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis.extra import numpy as hnp
 
-from kurai.engine.dither import bayer_offsets
+from kurai.engine.dither import bayer_offsets, floyd_steinberg
 from kurai.engine.mapping import apply_gamma, quantize
 from kurai.engine.stability import HysteresisState
 
@@ -111,3 +111,45 @@ def test_hysteresis_output_always_from_committed_domain(
         out = state.apply(luma, quantize(luma, levels), levels)
         assert int(out.max()) <= levels - 1
         assert np.array_equal(out, state.char_committed)
+
+
+# ------------------------------------------------------------------ E6 Floyd-Steinberg
+
+
+@settings(max_examples=50)
+@given(shape=_shape, levels=_levels, data=st.data())
+def test_fs_returns_exact_bin_centers(
+    shape: tuple[int, int], levels: int, data: st.DataObject
+) -> None:
+    """FS devuelve centros de bin exactos: quantize() reproduce el nivel que
+    FS eligió, sin riesgo de cruce de borde por redondeo (docs/02 E6)."""
+    luma = data.draw(_luma_arrays(shape))
+    dithered = floyd_steinberg(luma, levels)
+    assert dithered.shape == shape and dithered.dtype == np.float32
+    idx = quantize(dithered, levels)
+    centers = (idx.astype(np.float64) + 0.5) / levels
+    assert np.allclose(centers, dithered, atol=1e-6)
+    assert int(idx.min()) >= 0 and int(idx.max()) <= levels - 1
+
+
+@settings(max_examples=50)
+@given(shape=_shape, levels=_levels, data=st.data())
+def test_fs_deterministic(shape: tuple[int, int], levels: int, data: st.DataObject) -> None:
+    """G4: dos corridas de FS sobre el mismo input son bit a bit iguales."""
+    luma = data.draw(_luma_arrays(shape))
+    assert np.array_equal(floyd_steinberg(luma, levels), floyd_steinberg(luma, levels))
+
+
+@settings(max_examples=50)
+@given(
+    value=st.floats(0.0, 1.0, width=32),
+    levels=_levels,
+    shape=st.tuples(st.integers(8, 32), st.integers(8, 64)),
+)
+def test_fs_preserves_mean_on_flat_field(value: float, levels: int, shape: tuple[int, int]) -> None:
+    """La difusión de error conserva el brillo medio: en un campo plano, el
+    promedio de los centros elegidos queda a menos de un nivel del valor real —
+    la propiedad que Bayer/floor no tienen y que hace mejores los gradientes."""
+    flat = np.full(shape, value, dtype=np.float32)
+    dithered = floyd_steinberg(flat, levels)
+    assert abs(float(dithered.mean()) - value) <= 1.0 / levels

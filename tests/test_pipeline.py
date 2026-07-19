@@ -207,3 +207,79 @@ def test_detallado_with_model_uses_directional_glyphs(clip_testsrc: Path, tmp_pa
     cfg = JobConfig(preset=load_preset("detallado"), cols=80, output=out)
     run_job(clip_testsrc, cfg)
     assert out.exists()
+
+
+# ------------------------------------------------------------------ Fase 2: FS + fg+bg
+
+
+def _nitido_cfg(cols: int = 40) -> JobConfig:
+    return JobConfig(preset=load_preset("nitido"), cols=cols)
+
+
+def test_nitido_guard_passes() -> None:
+    """FS (E6) y fg+bg (E8) ya no son fase futura; alta-fidelidad sigue
+    bloqueado por sus componentes restantes (CNN, flow)."""
+    from kurai.engine.pipeline import guard_phase
+
+    guard_phase(_nitido_cfg())  # no levanta
+
+
+def test_nitido_gradient_golden() -> None:
+    """Golden del camino FS + edges + fg+bg (docs/06 §1)."""
+    rows, cols = 10, 40
+    cm = frames_to_charmatrices([_work_gradient(rows, cols)], rows, cols, _nitido_cfg())[0]
+    golden_path = GOLDEN_DIR / "gradient_nitido_40x10.npz"
+    assert golden_path.exists(), (
+        "Golden faltante: generarlo con tools/make_goldens.py y commitearlo"
+    )
+    golden = np.load(golden_path)
+    assert np.array_equal(cm.char_idx, golden["char_idx"])
+    assert np.array_equal(cm.fg, golden["fg"])
+    assert cm.bg is not None and np.array_equal(cm.bg, golden["bg"])
+
+
+def test_nitido_bit_exact_reproducibility() -> None:
+    """G4 sobre el camino nuevo completo: FS secuencial incluido."""
+    rows, cols = 10, 40
+    frames = [_work_gradient(rows, cols), _work_circle(rows, cols)]
+    a = frames_to_charmatrices(frames, rows, cols, _nitido_cfg())
+    b = frames_to_charmatrices(frames, rows, cols, _nitido_cfg())
+    assert all(x.equals(y) for x, y in zip(a, b, strict=True))
+
+
+def test_nitido_bg_carries_lower_half_color() -> None:
+    """fg+bg (docs/02 E8): fg = mitad superior de la celda, bg = inferior.
+    Con un frame partido horizontalmente (arriba rojo, abajo azul) cada celda
+    debe capturar ambos colores — la información que fg solo pierde."""
+    rows, cols = 4, 8
+    h, w = rows * CELL_H, cols * CELL_W
+    frame = np.zeros((h, w, 3), dtype=np.uint8)
+    frame[: CELL_H // 2, :, 0] = 200  # mitad superior de la primera fila: rojo
+    frame[CELL_H // 2 : CELL_H, :, 2] = 200  # mitad inferior: azul
+    cm = frames_to_charmatrices([frame], rows, cols, _nitido_cfg())[0]
+    assert cm.bg is not None
+    assert int(cm.fg[0, 0, 0]) == 200 and int(cm.fg[0, 0, 2]) == 0
+    assert int(cm.bg[0, 0, 2]) == 200 and int(cm.bg[0, 0, 0]) == 0
+
+
+def test_retro_golden_untouched_by_fase2() -> None:
+    """El camino retro no cambió: bg sigue None y el golden de retro es el
+    mismo (la regresión que la regla 8 prohíbe)."""
+    rows, cols = 10, 40
+    cm = frames_to_charmatrices([_work_gradient(rows, cols)], rows, cols, _retro_cfg())[0]
+    assert cm.bg is None
+
+
+@pytest.mark.ffmpeg
+def test_convert_nitido_e2e(clip_testsrc: Path, tmp_path: Path) -> None:
+    """El decode a rows*2 (fg+bg) atraviesa ffmpeg de verdad: mismo n_frames,
+    misma resolución de salida que el resto de presets."""
+    from kurai.engine.decode import probe_video
+
+    out = tmp_path / "nitido.mp4"
+    cfg = JobConfig(preset=load_preset("nitido"), cols=80, output=out)
+    result = run_job(clip_testsrc, cfg)
+    assert result == out and out.exists()
+    in_meta, out_meta = probe_video(clip_testsrc), probe_video(out)
+    assert out_meta.n_frames == in_meta.n_frames
+    assert out_meta.width % CELL_W == 0 and out_meta.height % CELL_H == 0

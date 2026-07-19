@@ -29,11 +29,15 @@ GOLDEN_DIR = REPO / "tests" / "golden"
 def main() -> int:
     GOLDEN_DIR.mkdir(exist_ok=True)
     rows, cols = 10, 40
-    cfg = JobConfig(preset=load_preset("retro"), cols=cols)
-    cm = frames_to_charmatrices([_work_gradient(rows, cols)], rows, cols, cfg)[0]
-    dest = GOLDEN_DIR / "gradient_retro_40x10.npz"
-    np.savez_compressed(dest, char_idx=cm.char_idx, fg=cm.fg)
-    print(f"✓ {dest.relative_to(REPO)} ({cm.shape[0]}×{cm.shape[1]})")
+    for preset in ("retro", "nitido"):
+        cfg = JobConfig(preset=load_preset(preset), cols=cols)
+        cm = frames_to_charmatrices([_work_gradient(rows, cols)], rows, cols, cfg)[0]
+        dest = GOLDEN_DIR / f"gradient_{preset}_40x10.npz"
+        arrays = {"char_idx": cm.char_idx, "fg": cm.fg}
+        if cm.bg is not None:
+            arrays["bg"] = cm.bg
+        np.savez_compressed(dest, **arrays)
+        print(f"✓ {dest.relative_to(REPO)} ({cm.shape[0]}×{cm.shape[1]})")
     return 0
 
 

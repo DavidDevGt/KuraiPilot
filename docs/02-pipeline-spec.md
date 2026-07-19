@@ -77,6 +77,7 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 - **Fuente de referencia**: una sola fuente monoespaciada bitmap-friendly empaquetada con el proyecto (candidata: Spleen o Cozette 8×16; decidir y fijar en build — la fuente es parte del contrato de reproducibilidad).
 - **Implementación**: **atlas de glifos pre-renderizado** una vez al inicio (`uint8[n_glyphs, 16, 8]`); el frame se compone con fancy indexing de NumPy/CuPy: `frame = atlas[char_idx]` reshapeado + tintado por `fg`. Prohibido dibujar carácter por carácter con PIL/Cairo en el hot path — es 100-1000× más lento y fue la causa de muerte de varios proyectos relevados.
 - Modos de color: `mono` (verde/ámbar/blanco sobre negro), `fg` (carácter tintado con el color de la celda), `fg+bg` (semi-bloque con dos colores por celda, máxima fidelidad).
+- **Contrato `fg+bg`** (Fase 2): la Etapa 1 decodifica la grilla a `rows*2` filas — dos muestras verticales por celda ("semi-bloque"). `fg` = color de la mitad superior, `bg` = el de la inferior; el camino tonal (E4-E7) corre sobre el promedio entero de ambas mitades. En composición, la tinta del glifo lleva `fg` y el resto de la celda `bg` (mezcla por el mask del atlas, solo fancy indexing). `CharMatrix.bg` deja de ser `None` exactamente en este modo.
 
 ## Etapa 9 — Encode y mux
 
@@ -96,7 +97,10 @@ Especificación normativa de las 9 etapas del pipeline de export. Cada etapa def
 |---|---|---|---|---|---|
 | `retro` (default) | off | off | Bayer | histéresis | mono |
 | `detallado` | on | edges | Bayer | histéresis | fg |
+| `nitido` | off | edges | Floyd-Steinberg | histéresis | fg+bg |
 | `alta-fidelidad` | on | edges+cnn | Floyd-Steinberg | histéresis+flow | fg+bg |
+
+`nitido` es el máximo detalle **determinista** (sin IA): la saliencia va apagada tras el NO-GO del A/B de Fase 1 (`docs/evaluations/2026-07-18-ab-saliencia.md`).
 
 ## 11. Concurrencia y manejo de errores
 

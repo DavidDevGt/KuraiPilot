@@ -36,6 +36,14 @@ SPEC_TABLE = {
         color=ColorMode.FG,
         ramp=Ramp.SHORT,
     ),
+    "nitido": dict(
+        saliency=False,
+        refine=RefineMode.EDGES,
+        dither=DitherMode.FLOYD_STEINBERG,
+        flicker=FlickerMode.HYSTERESIS,
+        color=ColorMode.FG_BG,
+        ramp=Ramp.SHORT,
+    ),
     "alta-fidelidad": dict(
         saliency=True,
         refine=RefineMode.EDGES_CNN,

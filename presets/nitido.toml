@@ -1,0 +1,10 @@
+# Máximo detalle determinista (docs/02 §10, Fase 2 parcial): Floyd-Steinberg
+# y dos colores por celda, sin IA — la saliencia quedó NO-GO en el A/B de
+# Fase 1 (docs/evaluations/2026-07-18-ab-saliencia.md) y acá va apagada.
+saliency = false
+refine = "edges"
+dither = "fs"
+flicker = "hysteresis"
+color = "fg+bg"
+ramp = "short"
+gamma = 0.8

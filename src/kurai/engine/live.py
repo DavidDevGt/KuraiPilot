@@ -16,7 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from kurai.config import JobConfig, RefineMode
+from kurai.config import ColorMode, DitherMode, JobConfig, RefineMode
 from kurai.engine.decode import iter_frames, probe_video
 from kurai.engine.dither import bayer_offsets
 from kurai.engine.grid import grid_shape
@@ -73,13 +73,20 @@ def run_live(
     """
     guard_phase(cfg)  # mismo contrato que convert: fase futura ⇒ error claro, no silencio
 
-    # El live es el subconjunto determinista tonal: saliencia (E3) y edges (E5)
-    # son del export/preview. Degradar en silencio sería divergencia oculta
-    # (regla 5) — se avisa ANTES de entrar al alt-screen, no se ignora.
-    if cfg.preset.saliency or cfg.preset.refine is not RefineMode.OFF:
+    # El live es el subconjunto determinista tonal con Bayer: saliencia (E3),
+    # edges (E5), Floyd-Steinberg (E6) y fg+bg (E8) son del export/preview.
+    # Degradar en silencio sería divergencia oculta (regla 5) — se avisa ANTES
+    # de entrar al alt-screen, no se ignora.
+    if (
+        cfg.preset.saliency
+        or cfg.preset.refine is not RefineMode.OFF
+        or cfg.preset.dither is not DitherMode.BAYER
+        or cfg.preset.color is ColorMode.FG_BG
+    ):
         warnings.warn(
-            "live reproduce el subconjunto determinista tonal: saliencia y edges "
-            "no se aplican acá (usá `kurai convert` o `kurai preview`).",
+            "live reproduce el subconjunto determinista tonal (Bayer): saliencia, "
+            "edges, Floyd-Steinberg y fg+bg no se aplican acá — fg+bg degrada a fg "
+            "(usá `kurai convert` o `kurai preview`).",
             UserWarning,
             stacklevel=2,
         )
@@ -94,7 +101,9 @@ def run_live(
     levels = len(ramp)
     offsets = bayer_offsets(rows, cols, levels)
     state = HysteresisState(rows, cols)
-    color = cfg.preset.color
+    # fg+bg → fg: el ANSI de dos colores por celda llega con la proyección
+    # fg+bg de ansi.py; mientras tanto el equivalente determinista es fg.
+    color = ColorMode.FG if cfg.preset.color is ColorMode.FG_BG else cfg.preset.color
 
     frame_period = 1.0 / meta.fps
     shown = skipped = 0
